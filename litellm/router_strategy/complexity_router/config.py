@@ -681,11 +681,12 @@ class CapabilityClassifierConfig(BaseModel):
 class JevClassifierConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    provider: Literal["typesafe", "laya"] = "typesafe"
     model: str = "jev-latest"
-    api_key: str | None = Field(default=None, description="TypeSafe API key, falling back to TYPESAFE_API_KEY")
+    api_key: str | None = Field(default=None, description="Provider API key; optional for self-hosted Laya")
     api_base: str | None = Field(
         default=None,
-        description="TypeSafe API base, falling back to TYPESAFE_API_BASE and then https://api.typesafe.ai",
+        description="Provider API base; defaults to TYPESAFE_API_BASE or LAYA_API_BASE for the selected provider",
     )
     timeout_ms: int = Field(default=3000, ge=1)
     instructions: str | None = Field(
@@ -711,6 +712,13 @@ class JevClassifierConfig(BaseModel):
 
     @model_validator(mode="after")
     def _keep_the_environment_key_on_the_environment_base(self) -> "JevClassifierConfig":
+        if self.provider == "laya":
+            from litellm.llms.laya.common_utils import validate_laya_api_base, validate_laya_model
+
+            _ = validate_laya_model(self.model)
+            if self.api_base is not None:
+                _ = validate_laya_api_base(self.api_base)
+            return self
         if self.api_base is not None and self.api_key is None:
             raise ValueError(
                 "jev_classifier_config.api_base requires jev_classifier_config.api_key: TYPESAFE_API_KEY is only sent "
