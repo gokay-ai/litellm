@@ -2581,6 +2581,72 @@ async def test_reconcile_before_db_update_does_not_double_count_when_flush_lands
     assert reservation["finalized"] is True
 
 
+class _BatchReadingRedisCache(_ExpiringRedisCache):
+    async def async_batch_get_cache(self, key_list: Sequence[str], **kwargs: object) -> dict[str, float | None]:
+        return {key: await self.async_get_cache(key) for key in key_list}
+
+
+@pytest.mark.asyncio
+async def test_reserved_counter_deleted_during_spend_write_is_reseeded_instead_of_going_negative(
+    spend_counter_state,
+):
+    import litellm.proxy.proxy_server as ps
+    from litellm.proxy.hooks.proxy_track_cost_callback import _update_database_and_spend_counters
+
+    counter_cache, _ = spend_counter_state
+    counter_key = "spend:key:key-deleted-mid-write"
+    redis_cache = _BatchReadingRedisCache()
+    counter_cache.redis_cache = redis_cache
+    await redis_cache.async_set_cache(counter_key, 0.6)
+    counter_cache.in_memory_cache.set_cache(key=counter_key, value=0.6)
+
+    async def _delete_counter_while_persisting(**kwargs: object) -> bool:
+        await redis_cache.async_delete_cache(counter_key)
+        counter_cache.in_memory_cache.delete_cache(key=counter_key)
+        return True
+
+    proxy_logging_obj = MagicMock()
+    proxy_logging_obj.db_spend_update_writer.update_database = AsyncMock(side_effect=_delete_counter_while_persisting)
+    reservation = {
+        "reserved_cost": 0.6,
+        "entries": [
+            {
+                "counter_key": counter_key,
+                "entity_type": "Key",
+                "entity_id": "key-deleted-mid-write",
+                "reserved_cost": 0.6,
+                "applied_adjustment": 0.0,
+            }
+        ],
+        "finalized": False,
+    }
+
+    with (
+        patch.object(  # test-quality-ok: the reseed reads the DB floor through a Prisma client the test has no seam for
+            ps.SpendCounterReseed, "from_db", AsyncMock(return_value=0.3)
+        )
+    ):
+        charged = await _update_database_and_spend_counters(
+            proxy_logging_obj=proxy_logging_obj,
+            increment_spend_counters=ps.increment_spend_counters,
+            user_api_key="key-deleted-mid-write",
+            user_id=None,
+            end_user_id=None,
+            team_id=None,
+            org_id=None,
+            kwargs={},
+            completion_response=None,
+            start_time=datetime.now(),
+            end_time=datetime.now(),
+            response_cost=0.05,
+            budget_reservation=reservation,
+        )
+
+    assert charged is True
+    assert redis_cache.store[counter_key] == pytest.approx(0.35), redis_cache.store
+    assert reservation["finalized"] is True
+
+
 @pytest.mark.asyncio
 async def test_should_invalidate_reserved_counters_after_persisted_spend_failure(
     spend_counter_state,

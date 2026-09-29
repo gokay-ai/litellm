@@ -636,14 +636,19 @@ async def test_a_failed_reservation_pipeline_drops_every_counter_and_reserves_no
 
 
 @pytest.mark.asyncio
-async def test_post_call_lifecycle_reads_one_mget_and_writes_one_pipeline_around_the_db_update(monkeypatch):
+async def test_post_call_lifecycle_reads_the_counters_after_the_db_update_and_writes_one_pipeline(monkeypatch):
     from litellm.proxy.hooks.proxy_track_cost_callback import _update_database_and_spend_counters
 
     redis = CountingRedis({key: 1.0 for key in POST_CALL_KEYS})
     monkeypatch.setattr(ps, "spend_counter_cache", _spend_counter_cache(redis))
     monkeypatch.setattr(ps, "prisma_client", None)
     proxy_logging_obj = MagicMock()
-    proxy_logging_obj.db_spend_update_writer.update_database = AsyncMock(return_value=True)
+
+    async def _update_database(**kwargs: object) -> bool:
+        redis.commands.append("DB")
+        return True
+
+    proxy_logging_obj.db_spend_update_writer.update_database = AsyncMock(side_effect=_update_database)
     reservation = _reservation(reserved_cost=0.4)
 
     charged = await _update_database_and_spend_counters(
@@ -666,9 +671,10 @@ async def test_post_call_lifecycle_reads_one_mget_and_writes_one_pipeline_around
 
     assert charged is True
     proxy_logging_obj.db_spend_update_writer.update_database.assert_awaited_once()
-    assert [c.split()[0] for c in redis.commands] == ["MGET", "PIPELINE"], redis.commands
-    assert set(redis.commands[0].split()[1:]) == POST_CALL_KEYS
-    assert set(redis.commands[1].split()[1:]) == POST_CALL_KEYS
+    assert [c.split()[0] for c in redis.commands] == ["MGET", "DB", "MGET", "PIPELINE"], redis.commands
+    assert set(redis.commands[0].split()[1:]) == RESERVED_KEYS
+    assert set(redis.commands[2].split()[1:]) == POST_CALL_KEYS
+    assert set(redis.commands[3].split()[1:]) == POST_CALL_KEYS
     assert {key: round(redis.store[key], 6) for key in POST_CALL_KEYS} == {
         key: (1.1 if key in RESERVED_KEYS else 1.5) for key in POST_CALL_KEYS
     }
