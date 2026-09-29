@@ -1614,6 +1614,8 @@ def test_completion_openai_with_optional_params(monkeypatch: pytest.MonkeyPatch,
     from typing import Final
 
     from pydantic import JsonValue, TypeAdapter
+    from litellm import utils as litellm_utils
+    from litellm.litellm_core_utils import litellm_logging
 
     observed: Final[SimpleQueue[tuple[object, ...]]] = SimpleQueue()
 
@@ -1622,6 +1624,8 @@ def test_completion_openai_with_optional_params(monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         observed.put((kwargs["user"], kwargs["model"], kwargs["seed"], kwargs["temperature"]))
 
+    monkeypatch.setattr(litellm_utils, "callback_list", [])
+    monkeypatch.setattr(litellm_logging, "customLogger", None)
     monkeypatch.setattr(litellm, "success_callback", [callback])
     route: Final = respx_mock.post("https://optional-params.test/v1/chat/completions").respond(
         json={

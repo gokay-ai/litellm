@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 import litellm
+from litellm._logging import verbose_router_logger
 from litellm.caching.caching import DualCache
 from litellm.caching.redis_cache import RedisCache, RedisCircuitBreakerOpenError
 from litellm.router_strategy.budget_limiter import RouterBudgetLimiting
@@ -385,7 +386,7 @@ async def test_push_task_failure_is_logged_once_and_not_leaked(disable_budget_sy
     finally:
         loop.set_exception_handler(None)
 
-    assert [record.getMessage() for record in caplog.records] == [
+    assert [record.getMessage() for record in caplog.records if record.name == verbose_router_logger.name] == [
         "Error syncing in-memory cache with Redis: Error 61 connecting to 127.0.0.1:6379"
     ]
     unretrieved.assert_not_called()
