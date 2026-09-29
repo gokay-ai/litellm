@@ -489,9 +489,10 @@ async def test_a_cancelled_post_call_flush_keeps_the_spend_counters_it_could_not
     spend_cache.in_memory_cache.set_cache("spend:key:k1", 3.0)
     monkeypatch.setattr(proxy_server, "spend_counter_cache", spend_cache)
 
-    with request_redis_batch_scope(), pytest.raises(asyncio.CancelledError):
+    with request_redis_batch_scope():
         await proxy_server._apply_spend_counter_increments([PendingSpendIncrement("spend:key:k1", 0.5)])
-        await flush_post_call_redis_batches()
+        with pytest.raises(asyncio.CancelledError):
+            await flush_post_call_redis_batches()
 
     assert redis_cache.alone == [], "a cancel says nothing about the counter, so it must not be deleted"
     assert spend_cache.in_memory_cache.get_cache("spend:key:k1") == 3.0
