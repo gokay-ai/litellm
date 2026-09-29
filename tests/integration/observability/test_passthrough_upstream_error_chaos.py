@@ -2,6 +2,7 @@ import asyncio
 import json
 import re
 import signal
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
@@ -132,27 +133,69 @@ async def test_passthrough_upstream_outage_mid_burst_still_logs_errors_once(gate
 async def test_passthrough_worker_sigkill_leaves_sibling_serving_and_logging(gateway: Gateway, tmp_path: Path) -> None:
     config: Final = yaml.safe_load(Path("tests/integration/proxy_config.yaml").read_text())
     path: Final = tmp_path / "chaos-kill.yaml"
-    with wire_server(_chaos_reply) as wire:
+    survivor_arrived: Final = threading.Event()
+    release_survivor: Final = threading.Event()
+
+    def respond(request: Request) -> Reply:
+        if "survivor-model" in request.target:
+            survivor_arrived.set()
+            return Reply(status=404, chunks=(_NOT_FOUND_BODY[:1], _NOT_FOUND_BODY[1:]), gate_after_first=release_survivor)
+        return _chaos_reply(request)
+
+    with wire_server(respond) as wire:
         config["environment_variables"] = {"GEMINI_API_BASE": wire.url, "GEMINI_API_KEY": "scripted"}
         path.write_text(yaml.safe_dump(config))
         with owned_proxy_process(gateway, tmp_path, {}, config=path, workers=2) as owned:
             candidate: Final = owned.gateway
             workers: Final = eventually(
                 lambda: tuple(int(pid) for pid in _STARTED_WORKER.findall(owned.log.read_text())),
-                lambda pids: len(pids) == 2,
+                lambda pids: len(pids) == 2 and owned.log.read_text().count("Application startup complete.") == 2,
                 seconds=30,
+            )
+            probe: Final = candidate.request("GET", "/health/readiness")
+            assert probe.status_code == 200, probe.text
+            survivor_port: Final = int(probe.extensions["network_stream"].get_extra_info("client_addr")[1])
+            survivor_pid: Final = next(
+                pid
+                for pid in workers
+                if any(
+                    connection.raddr
+                    and connection.laddr.port == candidate.client.base_url.port
+                    and connection.raddr.port == survivor_port
+                    for connection in psutil.Process(pid).net_connections(kind="tcp")
+                )
+            )
+            victim: Final = psutil.Process(next(pid for pid in workers if pid != survivor_pid))
+            survivor_request: Final = asyncio.create_task(
+                asyncio.to_thread(
+                    candidate.request,
+                    "POST",
+                    "/gemini/v1beta/models/survivor-model:generateContent",
+                    _GENERATE_CONTENT,
+                    headers={"x-goog-api-key": candidate.key},
+                )
             )
             burst: Final = asyncio.create_task(
                 _fire_burst(str(candidate.client.base_url), candidate.key, 20, tolerate_transport_errors=True)
             )
-            await asyncio.to_thread(eventually, lambda: wire.received.qsize(), lambda size: size >= 5, 30)
-            victim: Final = psutil.Process(workers[0])
-            victim.suspend()
-            victim_ports: Final = frozenset(
-                connection.raddr.port for connection in victim.net_connections(kind="tcp") if connection.raddr
-            )
-            victim.send_signal(signal.SIGKILL)
-            served: Final = await burst
+            try:
+                assert await asyncio.to_thread(survivor_arrived.wait, 10), "Survivor request did not reach the upstream"
+                await asyncio.to_thread(eventually, lambda: wire.received.qsize(), lambda size: size >= 6, 30)
+                victim.suspend()
+                victim_ports: Final = frozenset(
+                    connection.raddr.port
+                    for connection in victim.net_connections(kind="tcp")
+                    if connection.raddr and connection.laddr.port == candidate.client.base_url.port
+                )
+                victim.send_signal(signal.SIGKILL)
+            finally:
+                release_survivor.set()
+                survivor_response: Final = await survivor_request
+                served: Final = await burst
+            assert survivor_response.status_code == 404, survivor_response.text
+            assert survivor_response.json() == json.loads(_NOT_FOUND_BODY), survivor_response.text
+            assert int(survivor_response.extensions["network_stream"].get_extra_info("client_addr")[1]) == survivor_port
+            assert "x-litellm-call-id" in survivor_response.headers
             for item in served:
                 assert item.response.status_code in (200, 404, 500, 502), item.response.status_code
             follow_up: Final = candidate.request(
@@ -163,7 +206,10 @@ async def test_passthrough_worker_sigkill_leaves_sibling_serving_and_logging(gat
             )
             assert follow_up.status_code == 404, follow_up.text
             assert follow_up.json() == json.loads(_NOT_FOUND_BODY), follow_up.text
-            logged: Final = tuple(item for item in served if "x-litellm-call-id" in item.response.headers)
+            logged: Final = (
+                _Served(response=survivor_response, client_port=survivor_port),
+                *(item for item in served if "x-litellm-call-id" in item.response.headers),
+            )
             survivor_served: Final = tuple(item for item in logged if item.client_port not in victim_ports)
             assert survivor_served, [item.client_port for item in logged]
             for item in survivor_served:

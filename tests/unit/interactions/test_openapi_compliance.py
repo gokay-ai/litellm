@@ -122,6 +122,33 @@ class TestRequestCompliance:
             assert request["input"] == value
             request_validator.validate(request)
 
+    @pytest.mark.parametrize(
+        "response_format",
+        [
+            {"type": "text", "mime_type": "application/json", "schema": {"type": "object"}},
+            {"type": "image", "mime_type": "image/jpeg"},
+            {"type": "audio", "mime_type": "audio/wav"},
+            {"type": "video", "resolution": "720p"},
+            {"type": "object", "properties": {"answer": {"type": "string"}}},
+            [{"type": "text", "mime_type": "text/plain"}, {"type": "image"}],
+        ],
+    )
+    def test_response_format_preserves_provider_shapes(
+        self,
+        response_format: dict[str, JsonValue] | list[dict[str, JsonValue]],
+        request_validator: Draft202012Validator,
+    ) -> None:
+        request: Final = GoogleAIStudioInteractionsConfig().transform_request(
+            model="gemini-3.8-flash",
+            agent=None,
+            input="hello",
+            optional_params={"response_format": response_format},
+            litellm_params=GenericLiteLLMParams(api_key="synthetic-key"),
+            headers={},
+        )
+        assert request["response_format"] == response_format
+        request_validator.validate(request)
+
     def test_content_variants_are_identified_by_their_type_field(self, spec_dict):
         """Verify a Content part can be told apart by its `type`, however the spec spells that.
 

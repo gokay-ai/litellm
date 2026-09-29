@@ -3,7 +3,7 @@
     "url": "https://ai.google.dev/static/api/interactions.openapi.json",
     "retrieved": "2026-09-29",
     "normalized_source_sha256": "f22c644df1b74c5e1ec7c9677d83ec219994c2859ac7a055ba9ac042ec1a76dd",
-    "projection": "ModelInteraction contains request-writable fields only. Required output fields are excluded using readOnly annotations from ModelInteraction and Interaction. Referenced schemas are included. Documentation and SDK metadata are omitted."
+    "projection": "ModelInteraction contains request-writable fields only. Required output fields are excluded using readOnly annotations from ModelInteraction and Interaction. Referenced schemas are included. Documentation and SDK metadata are omitted. ResponseFormat generic objects exclude named format types so its oneOf branches do not overlap."
   },
   "components": {
     "schemas": {
@@ -1854,7 +1854,22 @@
           },
           {
             "type": "object",
-            "additionalProperties": true
+            "additionalProperties": true,
+            "not": {
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "enum": [
+                    "audio",
+                    "image",
+                    "text",
+                    "video"
+                  ]
+                }
+              }
+            }
           }
         ]
       },
