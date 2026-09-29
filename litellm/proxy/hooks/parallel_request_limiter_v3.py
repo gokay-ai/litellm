@@ -1438,7 +1438,7 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
             )
             return await self._batch_get_counter_values(keys=keys, parent_otel_span=parent_otel_span, local_only=True)
 
-    def _reject_if_rate_limit_unverifiable(self, failed_operation: str, error: Exception) -> None:
+    def _reject_if_rate_limit_unverifiable(self, failed_operation: str, error: BaseException) -> None:
         if not self._fail_closed_resolver():
             return
         log_redis_failure(
@@ -2244,6 +2244,8 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
             return over_limit
         failure: Final = next((r for r in responses if isinstance(r, BaseException)), None)
         if failure is not None:
+            await self._refund_applied_descriptor_groups(applied)
+            self._reject_if_rate_limit_unverifiable("check_and_increment_by_n_script", failure)
             log_redis_failure(
                 verbose_proxy_logger,
                 logging.ERROR,
@@ -2252,7 +2254,6 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
                 f"diverge from Redis until window expires (window_size={self.window_size}s)",
                 failure,
             )
-            await self._refund_applied_descriptor_groups(applied)
             flat_meta: Final = tuple(
                 itertools.chain.from_iterable(group_meta for _k, _a, group_meta in descriptor_groups)
             )
