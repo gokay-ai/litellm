@@ -12,6 +12,8 @@ import io
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from respx import MockRouter
+from tests.local_testing.completion_fixtures import LEGACY_COMPLETION_TEXT, LegacyCompletionAPI
 
 import litellm
 from litellm import RateLimitError, Timeout, completion, completion_cost, embedding
@@ -1577,90 +1579,84 @@ def test_completion_openai_pydantic(model, api_version):
         pytest.fail(f"Error occurred: {e}")
 
 
-def test_completion_text_openai():
+def test_completion_text_openai(legacy_completion_api: LegacyCompletionAPI) -> None:
     try:
         # litellm.set_verbose =True
-        response = completion(model="gpt-3.5-turbo-instruct", messages=messages)
-        print(response["choices"][0]["message"]["content"])
+        response = completion(
+            model="gpt-3.5-turbo-instruct", messages=messages, **legacy_completion_api.options
+        )
+        assert response.choices[0].message.content == LEGACY_COMPLETION_TEXT
+        assert isinstance(legacy_completion_api.requests[0].prompt, str)
+        assert messages[0]["content"] in legacy_completion_api.requests[0].prompt
     except Exception as e:
         print(e)
         pytest.fail(f"Error occurred: {e}")
 
 
 @pytest.mark.asyncio
-async def test_completion_text_openai_async():
-    try:
-        # litellm.set_verbose =True
+async def test_completion_text_openai_async(legacy_completion_api: LegacyCompletionAPI) -> None:
+    from openai import AsyncOpenAI
+
+    async with AsyncOpenAI(
+        api_key=legacy_completion_api.options["api_key"], base_url=legacy_completion_api.options["api_base"]
+    ) as client:
         response = await litellm.acompletion(
-            model="gpt-3.5-turbo-instruct", messages=messages
+            model="gpt-3.5-turbo-instruct", messages=messages, client=client, **legacy_completion_api.options
         )
-        print(response["choices"][0]["message"]["content"])
-    except Exception as e:
-        print(e)
-        pytest.fail(f"Error occurred: {e}")
+        assert response.choices[0].message.content == LEGACY_COMPLETION_TEXT
+        assert isinstance(legacy_completion_api.requests[0].prompt, str)
+        assert messages[0]["content"] in legacy_completion_api.requests[0].prompt
 
 
-def custom_callback(
-    kwargs,  # kwargs to completion
-    completion_response,  # response from completion
-    start_time,
-    end_time,  # start/end time
-):
-    # Your custom code here
-    try:
-        print("LITELLM: in custom callback function")
-        print("\nkwargs\n", kwargs)
-        model = kwargs["model"]
-        messages = kwargs["messages"]
-        user = kwargs.get("user")
+def test_completion_openai_with_optional_params(monkeypatch: pytest.MonkeyPatch, respx_mock: MockRouter) -> None:
+    from datetime import datetime
+    from queue import SimpleQueue
+    from typing import Final
 
-        #################################################
+    from pydantic import JsonValue, TypeAdapter
 
-        print(
-            f"""
-                Model: {model},
-                Messages: {messages},
-                User: {user},
-                Seed: {kwargs["seed"]},
-                temperature: {kwargs["temperature"]},
-            """
-        )
+    observed: Final[SimpleQueue[tuple[object, ...]]] = SimpleQueue()
 
-        assert kwargs["user"] == "ishaans app"
-        assert kwargs["model"] == "gpt-3.5-turbo-1106"
-        assert kwargs["seed"] == 12
-        assert kwargs["temperature"] == 0.5
-    except Exception as e:
-        pytest.fail(f"Error occurred: {e}")
+    def callback(
+        kwargs: dict[str, object], completion_response: object, start_time: datetime, end_time: datetime
+    ) -> None:
+        observed.put((kwargs["user"], kwargs["model"], kwargs["seed"], kwargs["temperature"]))
 
-
-def test_completion_openai_with_optional_params():
-    # [Proxy PROD TEST] WARNING: DO NOT DELETE THIS TEST
-    # assert that `user` gets passed to the completion call
-    # Note: This tests that we actually send the optional params to the completion call
-    # We use custom callbacks to test this
-    try:
-        litellm.set_verbose = True
-        litellm.success_callback = [custom_callback]
-        response = completion(
-            model="gpt-3.5-turbo-1106",
-            messages=[
-                {"role": "user", "content": "respond in valid, json - what is the day"}
-            ],
-            temperature=0.5,
-            top_p=0.1,
-            seed=12,
-            response_format={"type": "json_object"},
-            logit_bias=None,
-            user="ishaans app",
-        )
-        # Add any assertions here to check the response
-
-        print(response)
-        litellm.success_callback = []  # unset callbacks
-
-    except Exception as e:
-        pytest.fail(f"Error occurred: {e}")
+    monkeypatch.setattr(litellm, "success_callback", [callback])
+    route: Final = respx_mock.post("https://optional-params.test/v1/chat/completions").respond(
+        json={
+            "id": "chatcmpl-optional-params",
+            "object": "chat.completion",
+            "created": 1,
+            "model": "gpt-3.5-turbo-1106",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "{}"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 2, "total_tokens": 7},
+        }
+    )
+    response: Final = completion(
+        model="gpt-3.5-turbo-1106",
+        messages=[{"role": "user", "content": "respond in valid, json - what is the day"}],
+        temperature=0.5,
+        top_p=0.1,
+        seed=12,
+        response_format={"type": "json_object"},
+        logit_bias=None,
+        user="test-user",
+        api_base="https://optional-params.test/v1",
+        api_key="synthetic-key",
+    )
+    assert response.choices[0].message.content == "{}"
+    assert route.call_count == 1
+    sent: Final = TypeAdapter(dict[str, JsonValue]).validate_json(route.calls[0].request.content)
+    assert {key: sent[key] for key in ("model", "user", "temperature", "top_p", "seed", "response_format")} == {
+        "model": "gpt-3.5-turbo-1106",
+        "user": "test-user",
+        "temperature": 0.5,
+        "top_p": 0.1,
+        "seed": 12,
+        "response_format": {"type": "json_object"},
+    }
+    assert observed.get(timeout=5) == ("test-user", "gpt-3.5-turbo-1106", 12, 0.5)
 
 
 # test_completion_openai_with_optional_params()
@@ -4005,16 +4001,18 @@ def test_deepseek_reasoning_content_completion():
         pytest.skip("Model is timing out")
 
 
-def test_qwen_text_completion():
+def test_qwen_text_completion(legacy_completion_api: LegacyCompletionAPI) -> None:
     # litellm._turn_on_debug()
     resp = litellm.completion(
         model="gpt-3.5-turbo-instruct",
         messages=[{"content": "hello", "role": "user"}],
         stream=False,
         logprobs=1,
+        **legacy_completion_api.options,
     )
-    assert resp.choices[0].message.content is not None
-    assert resp.choices[0].logprobs.token_logprobs[0] is not None
+    assert legacy_completion_api.requests[0].logprobs == 1
+    assert resp.choices[0].message.content == LEGACY_COMPLETION_TEXT
+    assert resp.choices[0].logprobs.token_logprobs == [-0.25]
     print(
         f"resp.choices[0].logprobs.token_logprobs[0]: {resp.choices[0].logprobs.token_logprobs[0]}"
     )

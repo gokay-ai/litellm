@@ -144,6 +144,8 @@ model_list:
   - model_name: gpt-instruct # [PROD TEST] - tests if `/health` automatically infers this to be a text completion model
     litellm_params:
       model: text-completion-openai/gpt-3.5-turbo-instruct
+      api_key: synthetic-completion-key
+      api_base: os.environ/FAKE_OPENAI_API_BASE
   - model_name: fake-openai-endpoint-5
     litellm_params:
       model: openai/my-fake-model
@@ -247,4 +249,4 @@ general_settings:
   # settings for using redis caching
   # REDIS_HOST: redis-16337.c322.us-east-1-2.ec2.cloud.redislabs.com
   # REDIS_PORT: "16337"
-  # REDIS_PASSWORD: 
+  # REDIS_PASSWORD:

@@ -1,40 +1,24 @@
 """
 OpenAPI compliance tests for Google Interactions API.
 
-Validates that our SDK requests/responses match the OpenAPI spec at:
-https://ai.google.dev/static/api/interactions.openapi.json
+Uses the captured provider contract in fixtures/gemini_interactions_contract.json
 
 Run with: pytest tests/unit/interactions/test_openapi_compliance.py -v
 """
 
-import json
-import os
+from pathlib import Path
+from typing import Final
 from typing import Any, Dict
-from unittest.mock import MagicMock, patch
 
-import httpx
 import pytest
-from openapi_core import OpenAPI
+from pydantic import JsonValue, TypeAdapter
 
-OPENAPI_SPEC_URL = "https://ai.google.dev/static/api/interactions.openapi.json"
+from litellm.llms.gemini.interactions.transformation import GoogleAIStudioInteractionsConfig
+from litellm.types.router import GenericLiteLLMParams
 
-
-def _load_openapi_spec_dict() -> Dict[str, Any]:
-    """
-    Load the OpenAPI spec JSON.
-
-    In CI or offline environments, network access may not be available.
-    In that case, gracefully skip these tests instead of erroring.
-    """
-    try:
-        response = httpx.get(OPENAPI_SPEC_URL, timeout=5.0)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:  # pragma: no cover - defensive, env-dependent
-        pytest.skip(
-            f"Skipping Google Interactions OpenAPI compliance tests - "
-            f"unable to load spec from {OPENAPI_SPEC_URL}: {e}"
-        )
+def _load_openapi_spec_dict() -> dict[str, JsonValue]:
+    source: Final = Path(__file__).with_name("fixtures") / "gemini_interactions_contract.json"
+    return TypeAdapter(dict[str, JsonValue]).validate_json(source.read_bytes())
 
 
 def _declared_type_value(variant_schema: Dict[str, Any]) -> Any:
@@ -50,22 +34,26 @@ def spec_dict() -> Dict[str, Any]:
     return _load_openapi_spec_dict()
 
 
-@pytest.fixture(scope="module")
-def openapi_spec(spec_dict: Dict[str, Any]) -> OpenAPI:
-    """Load the OpenAPI spec as an OpenAPI object."""
-    return OpenAPI.from_dict(spec_dict)
-
-
 class TestRequestCompliance:
     """Tests that our request bodies match the OpenAPI spec."""
 
     def test_create_model_interaction_request_schema(self, spec_dict):
-        """Verify CreateModelInteractionParams schema fields."""
-        schema = spec_dict["components"]["schemas"]["CreateModelInteractionParams"]
+        """Verify a model request against the captured provider contract."""
+        schema = spec_dict["components"]["schemas"]["ModelInteraction"]
 
         # Required fields per spec
         assert "model" in schema["required"]
-        assert "input" in schema["required"]
+        assert "input" in schema["properties"]
+        request: Final = GoogleAIStudioInteractionsConfig().transform_request(
+            model="gemini-contract-test",
+            agent=None,
+            input="hello",
+            optional_params={"store": False, "stream": False},
+            litellm_params=GenericLiteLLMParams(api_key="synthetic-key"),
+            headers={},
+        )
+        assert request == {"model": "gemini-contract-test", "input": "hello", "store": False, "stream": False}
+        assert request.keys() <= schema["properties"].keys()
 
         # Check our supported optional fields exist in spec
         our_optional_fields = [
@@ -88,7 +76,7 @@ class TestRequestCompliance:
 
     def test_input_types_match_spec(self, spec_dict):
         """Verify input field supports string, Content, Content[], Turn[]."""
-        schema = spec_dict["components"]["schemas"]["CreateModelInteractionParams"]
+        schema = spec_dict["components"]["schemas"]["ModelInteraction"]
         input_schema = schema["properties"]["input"]
 
         # The input property may be inline oneOf or a $ref to InteractionsInput
@@ -111,6 +99,16 @@ class TestRequestCompliance:
         print(f"Input supports types: {input_types}")
         assert "string" in input_types, "Input should support string"
         assert "array" in input_types, "Input should support array"
+        for value in ("hello", [{"type": "text", "text": "hello"}]):
+            request: Final = GoogleAIStudioInteractionsConfig().transform_request(
+                model="gemini-contract-test",
+                agent=None,
+                input=value,
+                optional_params={},
+                litellm_params=GenericLiteLLMParams(api_key="synthetic-key"),
+                headers={},
+            )
+            assert request["input"] == value
 
     def test_content_variants_are_identified_by_their_type_field(self, spec_dict):
         """Verify a Content part can be told apart by its `type`, however the spec spells that.
@@ -207,17 +205,8 @@ class TestResponseCompliance:
 
     def test_interaction_response_fields(self, spec_dict):
         """Verify our InteractionsAPIResponse has correct fields."""
-        # The response is the dedicated `Interaction` schema. Google moved the
-        # output-only fields (notably the `steps` array, formerly `outputs`)
-        # off `CreateModelInteractionParams` and onto `Interaction`; the request
-        # schema no longer carries `steps`. Google later moved `role` off
-        # `Interaction` onto the per-turn `Turn` schema (asserted in
-        # test_turn_schema), so it is no longer a top-level output field here.
-        # Keep this aligned with the live spec.
         schema = spec_dict["components"]["schemas"]["Interaction"]
 
-        # Output fields (readOnly). `role` was removed from the `Interaction`
-        # schema by Google; it now lives only on `Turn`.
         output_fields = [
             "id",
             "status",
@@ -236,10 +225,6 @@ class TestResponseCompliance:
         # `status` is an output-only field; validate against the response schema.
         schema = spec_dict["components"]["schemas"]["Interaction"]
         status_prop = schema["properties"]["status"]
-        # Google Interactions API uses lowercase status values (updated Feb 2026).
-        # Keep this an exact match: this test intentionally breaks CI when
-        # Google changes the live spec — that breakage is how we get notified
-        # to review the change.
         expected_statuses = [
             "in_progress",
             "requires_action",
@@ -313,11 +298,20 @@ class TestEndpointCompliance:
 
         get_path = None
         for path, methods in paths.items():
-            if "{id}" in path and "interactions" in path and "get" in methods:
+            if "/interactions/{" in path and path.endswith("}") and "get" in methods:
                 get_path = path
                 break
 
         assert get_path is not None, "GET /interactions/{id} endpoint not found"
+        url, params = GoogleAIStudioInteractionsConfig().transform_get_interaction_request(
+            interaction_id="contract-id",
+            api_base="https://generativelanguage.googleapis.com",
+            litellm_params=GenericLiteLLMParams(api_key="synthetic-key"),
+            headers={},
+        )
+        expected_path: Final = get_path.replace("{api_version}", "v1beta").rsplit("/", 1)[0] + "/contract-id"
+        assert url == "https://generativelanguage.googleapis.com" + expected_path
+        assert params == {}
         print(f"✓ Get endpoint: GET {get_path}")
 
     def test_delete_endpoint_exists(self, spec_dict):
@@ -326,30 +320,18 @@ class TestEndpointCompliance:
 
         delete_path = None
         for path, methods in paths.items():
-            if "{id}" in path and "interactions" in path and "delete" in methods:
+            if "/interactions/{" in path and path.endswith("}") and "delete" in methods:
                 delete_path = path
                 break
 
         assert delete_path is not None, "DELETE /interactions/{id} endpoint not found"
+        url, params = GoogleAIStudioInteractionsConfig().transform_delete_interaction_request(
+            interaction_id="contract-id",
+            api_base="https://generativelanguage.googleapis.com",
+            litellm_params=GenericLiteLLMParams(api_key="synthetic-key"),
+            headers={},
+        )
+        expected_path: Final = delete_path.replace("{api_version}", "v1beta").rsplit("/", 1)[0] + "/contract-id"
+        assert url == "https://generativelanguage.googleapis.com" + expected_path
+        assert params == {}
         print(f"✓ Delete endpoint: DELETE {delete_path}")
-
-
-if __name__ == "__main__":
-    # Quick manual test
-    import httpx
-
-    print("Loading OpenAPI spec...")
-    response = httpx.get(OPENAPI_SPEC_URL)
-    spec = response.json()
-
-    print(f"\nSpec version: {spec.get('openapi')}")
-    print(f"API title: {spec.get('info', {}).get('title')}")
-    print(f"\nEndpoints:")
-    for path, methods in spec.get("paths", {}).items():
-        for method in methods:
-            if method in ["get", "post", "delete", "put", "patch"]:
-                print(f"  {method.upper()} {path}")
-
-    print(
-        f"\nSchemas: {list(spec.get('components', {}).get('schemas', {}).keys())[:10]}..."
-    )

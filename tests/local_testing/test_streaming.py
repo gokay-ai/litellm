@@ -7,10 +7,11 @@ import os
 import time
 import traceback
 from litellm._uuid import uuid
-from typing import Tuple
+from typing import Final, Tuple
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from tests.local_testing.completion_fixtures import LegacyCompletionAPI
 from pydantic import BaseModel
 
 import litellm.litellm_core_utils
@@ -1546,45 +1547,24 @@ async def test_openai_stream_options_call(model, sync):
     )
 
 
-def test_openai_stream_options_call_text_completion():
-    litellm.set_verbose = False
-    for idx in range(3):
-        try:
-            response = litellm.text_completion(
-                model="gpt-3.5-turbo-instruct",
-                prompt="say GM - we're going to make it ",
-                stream=True,
-                stream_options={"include_usage": True},
-                max_tokens=10,
-            )
-            usage = None
-            chunks = []
-            for chunk in response:
-                print("chunk: ", chunk)
-                chunks.append(chunk)
-
-            last_chunk = chunks[-1]
-            print("last chunk: ", last_chunk)
-
-            """
-            Assert that:
-            - Last Chunk includes Usage
-            - All chunks prior to last chunk have usage=None
-            """
-
-            assert last_chunk.usage is not None
-            assert last_chunk.usage.total_tokens > 0
-            assert last_chunk.usage.prompt_tokens > 0
-            assert last_chunk.usage.completion_tokens > 0
-
-            # assert all non last chunks have usage=None
-            assert all(chunk.usage is None for chunk in chunks[:-1])
-            break
-        except Exception as e:
-            if idx < 2:
-                pass
-            else:
-                raise e
+def test_openai_stream_options_call_text_completion(legacy_completion_api: LegacyCompletionAPI) -> None:
+    response: Final = litellm.text_completion(
+        model="gpt-3.5-turbo-instruct",
+        prompt="say GM - we're going to make it ",
+        stream=True,
+        stream_options={"include_usage": True},
+        max_tokens=10,
+        **legacy_completion_api.options,
+    )
+    chunks: Final = tuple(response)
+    assert chunks
+    last_chunk: Final = chunks[-1]
+    assert last_chunk.usage is not None
+    assert all(chunk.usage is None for chunk in chunks[:-1])
+    assert legacy_completion_api.requests[0].stream_options == {"include_usage": True}
+    assert last_chunk.usage.prompt_tokens == 5
+    assert last_chunk.usage.completion_tokens == 2
+    assert last_chunk.usage.total_tokens == 7
 
 
 def test_openai_text_completion_call():

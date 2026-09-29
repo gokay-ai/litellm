@@ -1,0 +1,956 @@
+{
+  "source": {
+    "url": "https://ai.google.dev/static/api/interactions.openapi.json",
+    "retrieved": "2026-09-29",
+    "normalized_source_sha256": "f22c644df1b74c5e1ec7c9677d83ec219994c2859ac7a055ba9ac042ec1a76dd"
+  },
+  "components": {
+    "schemas": {
+      "ModelInteraction": {
+        "type": "object",
+        "properties": {
+          "background": {
+            "type": "boolean",
+            "writeOnly": true
+          },
+          "cached_content": {
+            "type": "string",
+            "deprecated": true
+          },
+          "created": {
+            "type": "string",
+            "readOnly": true
+          },
+          "environment": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentConfig"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "environment_id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "generation_config": {
+            "$ref": "#/components/schemas/GenerationConfig",
+            "writeOnly": true
+          },
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "input": {
+            "$ref": "#/components/schemas/InteractionsInput"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelOption"
+          },
+          "previous_interaction_id": {
+            "type": "string"
+          },
+          "response_format": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ResponseFormat"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ResponseFormat"
+                }
+              }
+            ]
+          },
+          "response_mime_type": {
+            "type": "string",
+            "deprecated": true
+          },
+          "response_modalities": {
+            "type": "array",
+            "deprecated": true,
+            "items": {
+              "$ref": "#/components/schemas/ResponseModality"
+            }
+          },
+          "safety_settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SafetySetting"
+            }
+          },
+          "service_tier": {
+            "$ref": "#/components/schemas/ServiceTier"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "in_progress",
+              "requires_action",
+              "completed",
+              "failed",
+              "cancelled",
+              "incomplete",
+              "budget_exceeded",
+              "queued"
+            ],
+            "readOnly": true
+          },
+          "store": {
+            "type": "boolean",
+            "writeOnly": true
+          },
+          "stream": {
+            "type": "boolean",
+            "writeOnly": true
+          },
+          "system_instruction": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            }
+          },
+          "updated": {
+            "type": "string",
+            "readOnly": true
+          },
+          "webhook_config": {
+            "$ref": "#/components/schemas/WebhookConfig"
+          }
+        },
+        "required": [
+          "created",
+          "id",
+          "model",
+          "status",
+          "steps",
+          "updated"
+        ]
+      },
+      "InteractionsInput": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Content"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Content"
+            }
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "Content": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AudioContent"
+          },
+          {
+            "$ref": "#/components/schemas/DocumentContent"
+          },
+          {
+            "$ref": "#/components/schemas/ImageContent"
+          },
+          {
+            "$ref": "#/components/schemas/TextContent"
+          },
+          {
+            "$ref": "#/components/schemas/VideoContent"
+          }
+        ]
+      },
+      "TextContent": {
+        "type": "object",
+        "properties": {
+          "annotations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Annotation"
+            }
+          },
+          "text": {
+            "type": "string"
+          },
+          "type": {
+            "const": "text"
+          }
+        },
+        "required": [
+          "text",
+          "type"
+        ]
+      },
+      "Step": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CodeExecutionCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/CodeExecutionResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/FileSearchCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/FileSearchResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/FunctionCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/FunctionResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleMapsCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleMapsResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleSearchCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleSearchResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/McpServerToolCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/McpServerToolResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/ModelOutputStep"
+          },
+          {
+            "$ref": "#/components/schemas/ProcessingCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/ProcessingResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/RetrievalCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/RetrievalResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/ThoughtStep"
+          },
+          {
+            "$ref": "#/components/schemas/UrlContextCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/UrlContextResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/UserInputStep"
+          }
+        ]
+      },
+      "UserInputStep": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Content"
+            }
+          },
+          "type": {
+            "const": "user_input"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ModelOutputStep": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Content"
+            }
+          },
+          "error": {
+            "$ref": "#/components/schemas/Status",
+            "deprecated": true
+          },
+          "type": {
+            "const": "model_output"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "Interaction": {
+        "type": "object",
+        "properties": {
+          "agent": {
+            "$ref": "#/components/schemas/AgentOption"
+          },
+          "agent_config": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AntigravityAgentConfig"
+              },
+              {
+                "$ref": "#/components/schemas/CodeMenderAgentConfig"
+              },
+              {
+                "$ref": "#/components/schemas/DeepResearchAgentConfig"
+              },
+              {
+                "$ref": "#/components/schemas/DynamicAgentConfig"
+              }
+            ],
+            "discriminator": {
+              "propertyName": "type"
+            }
+          },
+          "background": {
+            "type": "boolean",
+            "writeOnly": true
+          },
+          "cached_content": {
+            "type": "string",
+            "deprecated": true
+          },
+          "created": {
+            "type": "string",
+            "readOnly": true
+          },
+          "environment": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentConfig"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "environment_id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "errors": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "readOnly": true
+          },
+          "generation_config": {
+            "$ref": "#/components/schemas/GenerationConfig",
+            "writeOnly": true
+          },
+          "id": {
+            "type": "string",
+            "default": "",
+            "readOnly": true
+          },
+          "input": {
+            "$ref": "#/components/schemas/InteractionsInput"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelOption"
+          },
+          "previous_interaction_id": {
+            "type": "string"
+          },
+          "response_format": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ResponseFormat"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ResponseFormat"
+                }
+              }
+            ]
+          },
+          "response_mime_type": {
+            "type": "string",
+            "deprecated": true
+          },
+          "response_modalities": {
+            "type": "array",
+            "deprecated": true,
+            "items": {
+              "$ref": "#/components/schemas/ResponseModality"
+            }
+          },
+          "safety_settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SafetySetting"
+            }
+          },
+          "service_tier": {
+            "$ref": "#/components/schemas/ServiceTier"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "in_progress",
+              "requires_action",
+              "completed",
+              "failed",
+              "cancelled",
+              "incomplete",
+              "budget_exceeded",
+              "queued"
+            ],
+            "readOnly": true
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "readOnly": true
+          },
+          "store": {
+            "type": "boolean",
+            "writeOnly": true
+          },
+          "stream": {
+            "type": "boolean",
+            "writeOnly": true
+          },
+          "system_instruction": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            }
+          },
+          "updated": {
+            "type": "string",
+            "readOnly": true
+          },
+          "usage": {
+            "$ref": "#/components/schemas/Usage",
+            "readOnly": true
+          },
+          "webhook_config": {
+            "$ref": "#/components/schemas/WebhookConfig"
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "Usage": {
+        "type": "object",
+        "properties": {
+          "cached_tokens_by_modality": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModalityTokens"
+            }
+          },
+          "grounding_tool_count": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GroundingToolCount"
+            }
+          },
+          "input_tokens_by_modality": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModalityTokens"
+            }
+          },
+          "output_tokens_by_modality": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModalityTokens"
+            }
+          },
+          "tool_use_tokens_by_modality": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ModalityTokens"
+            }
+          },
+          "total_cached_tokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_input_tokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_output_tokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_thought_tokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_tokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total_tool_use_tokens": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "readOnly": true
+      },
+      "Tool": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CodeExecution"
+          },
+          {
+            "$ref": "#/components/schemas/ComputerUse"
+          },
+          {
+            "$ref": "#/components/schemas/FileSearch"
+          },
+          {
+            "$ref": "#/components/schemas/Function"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleMaps"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleSearch"
+          },
+          {
+            "$ref": "#/components/schemas/McpServer"
+          },
+          {
+            "$ref": "#/components/schemas/Retrieval"
+          },
+          {
+            "$ref": "#/components/schemas/UrlContext"
+          }
+        ]
+      },
+      "AudioContent": {
+        "type": "object",
+        "properties": {
+          "channels": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "data": {
+            "type": "string",
+            "format": "byte"
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "audio/wav",
+              "audio/mp3",
+              "audio/aiff",
+              "audio/aac",
+              "audio/ogg",
+              "audio/flac",
+              "audio/mpeg",
+              "audio/m4a",
+              "audio/l16",
+              "audio/opus",
+              "audio/alaw",
+              "audio/mulaw",
+              "audio/webm"
+            ]
+          },
+          "sample_rate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "const": "audio"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "DocumentContent": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "format": "byte"
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "application/pdf",
+              "text/csv"
+            ]
+          },
+          "type": {
+            "const": "document"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ImageContent": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "format": "byte"
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/webp",
+              "image/heic",
+              "image/heif",
+              "image/gif",
+              "image/bmp",
+              "image/tiff"
+            ]
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/MediaResolution"
+          },
+          "type": {
+            "const": "image"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "VideoContent": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "format": "byte"
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "video/mp4",
+              "video/mpeg",
+              "video/mpg",
+              "video/mov",
+              "video/avi",
+              "video/x-flv",
+              "video/webm",
+              "video/wmv",
+              "video/3gpp"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "processing": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MediaProcessing"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "static",
+                  "agentic"
+                ]
+              }
+            ]
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/MediaResolution"
+          },
+          "type": {
+            "const": "video"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      }
+    }
+  },
+  "paths": {
+    "/{api_version}/interactions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/api_version"
+        }
+      ],
+      "post": {
+        "operationId": "CreateInteraction",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/AgentInteraction"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ModelInteraction"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionSseStreamEnvelope"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    },
+    "/{api_version}/interactions/{interactionsId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/api_version"
+        }
+      ],
+      "delete": {
+        "operationId": "deleteInteraction",
+        "parameters": [
+          {
+            "name": "interactionsId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {},
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      },
+      "get": {
+        "operationId": "getInteractionById",
+        "parameters": [
+          {
+            "name": "include_input",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "interactionsId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "last_event_id",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "stream",
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Interaction"
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/InteractionSseStreamEnvelope"
+                }
+              }
+            }
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "error": {
+                      "$ref": "#/components/schemas/Error"
+                    }
+                  },
+                  "required": [
+                    "error"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "interactions"
+        ]
+      }
+    }
+  }
+}

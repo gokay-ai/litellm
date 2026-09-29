@@ -1,6 +1,7 @@
 import asyncio
 import json
 import traceback
+from typing import Final
 
 from dotenv import load_dotenv
 
@@ -10,6 +11,7 @@ import io
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tests.local_testing.completion_fixtures import LEGACY_COMPLETION_TEXT, LegacyCompletionAPI
 
 import litellm
 from litellm import (
@@ -3773,59 +3775,45 @@ def test_unit_test_text_completion_object():
     assert text_completion_obj.usage.total_tokens == 1931
 
 
-def test_completion_openai_prompt():
-    try:
-        print("\n text 003 test\n")
-        response = text_completion(
-            model="gpt-3.5-turbo-instruct",
-            prompt=["What's the weather in SF?", "How is Manchester?"],
-        )
-        print(response)
-        assert len(response.choices) == 2
-        response_str = response["choices"][0]["text"]
-    except Exception as e:
-        pytest.fail(f"Error occurred: {e}")
+def test_completion_openai_prompt(legacy_completion_api: LegacyCompletionAPI) -> None:
+    response: Final = text_completion(
+        model="gpt-3.5-turbo-instruct",
+        prompt=["What's the weather in SF?", "How is Manchester?"],
+        **legacy_completion_api.options,
+    )
+    assert legacy_completion_api.requests[0].prompt == ("What's the weather in SF?", "How is Manchester?")
+    assert [choice.text for choice in response.choices] == [LEGACY_COMPLETION_TEXT, LEGACY_COMPLETION_TEXT]
 
 
 # test_completion_openai_prompt()
 
 
-def test_completion_openai_engine_and_model():
-    try:
-        print("\n text 003 test\n")
-        litellm.set_verbose = True
-        response = text_completion(
-            model="gpt-3.5-turbo-instruct",
-            engine="anything",
-            prompt="What's the weather in SF?",
-            max_tokens=5,
-        )
-        print(response)
-        response_str = response["choices"][0]["text"]
-        # print(response.choices[0])
-        # print(response.choices[0].text)
-    except Exception as e:
-        pytest.fail(f"Error occurred: {e}")
+def test_completion_openai_engine_and_model(legacy_completion_api: LegacyCompletionAPI) -> None:
+    response: Final = text_completion(
+        model="gpt-3.5-turbo-instruct",
+        engine="anything",
+        prompt="What's the weather in SF?",
+        max_tokens=5,
+        **legacy_completion_api.options,
+    )
+    assert legacy_completion_api.requests[0].model == "gpt-3.5-turbo-instruct"
+    assert legacy_completion_api.requests[0].max_tokens == 5
+    assert response.choices[0].text == LEGACY_COMPLETION_TEXT
 
 
 # test_completion_openai_engine_and_model()
 
 
-def test_completion_openai_engine():
-    try:
-        print("\n text 003 test\n")
-        litellm.set_verbose = True
-        response = text_completion(
-            engine="gpt-3.5-turbo-instruct",
-            prompt="What's the weather in SF?",
-            max_tokens=5,
-        )
-        print(response)
-        response_str = response["choices"][0]["text"]
-        # print(response.choices[0])
-        # print(response.choices[0].text)
-    except Exception as e:
-        pytest.fail(f"Error occurred: {e}")
+def test_completion_openai_engine(legacy_completion_api: LegacyCompletionAPI) -> None:
+    response: Final = text_completion(
+        engine="gpt-3.5-turbo-instruct",
+        prompt="What's the weather in SF?",
+        max_tokens=5,
+        **legacy_completion_api.options,
+    )
+    assert legacy_completion_api.requests[0].model == "gpt-3.5-turbo-instruct"
+    assert legacy_completion_api.requests[0].max_tokens == 5
+    assert response.choices[0].text == LEGACY_COMPLETION_TEXT
 
 
 # test_completion_openai_engine()
@@ -3849,63 +3837,47 @@ def test_completion_chatgpt_prompt():
 # test_completion_chatgpt_prompt()
 
 
-def test_completion_gpt_instruct():
-    try:
-        response = text_completion(
-            model="gpt-3.5-turbo-instruct-0914",
-            prompt="What's the weather in SF?",
-            custom_llm_provider="openai",
-        )
-        print(response)
-        response_str = response["choices"][0]["text"]
-        print("\n", response.choices)
-        print("\n", response.choices[0])
-        # print(response.choices[0].text)
-    except Exception as e:
-        pytest.fail(f"Error occurred: {e}")
+def test_completion_gpt_instruct(legacy_completion_api: LegacyCompletionAPI) -> None:
+    response: Final = text_completion(
+        model="gpt-3.5-turbo-instruct-0914",
+        prompt="What's the weather in SF?",
+        custom_llm_provider="openai",
+        **legacy_completion_api.options,
+    )
+    assert legacy_completion_api.requests[0].model == "gpt-3.5-turbo-instruct-0914"
+    assert legacy_completion_api.requests[0].prompt == "What's the weather in SF?"
+    assert response.choices[0].text == LEGACY_COMPLETION_TEXT
 
 
 # test_completion_chatgpt_prompt()
 
 
-def test_text_completion_basic():
-    try:
-        print("\n test 003 with logprobs \n")
-        litellm.set_verbose = False
-        response = text_completion(
-            model="gpt-3.5-turbo-instruct",
-            prompt="good morning",
-            max_tokens=10,
-            logprobs=10,
-        )
-        print(response)
-        print(response.choices)
-        print(response.choices[0])
-        # print(response.choices[0].text)
-        response_str = response["choices"][0]["text"]
-    except Exception as e:
-        if "502: Bad gateway" in str(e):
-            print("502: Bad gateway error occurred... passing")
-            return
-        pytest.fail(f"Error occurred: {e}")
+def test_text_completion_basic(legacy_completion_api: LegacyCompletionAPI) -> None:
+    response: Final = text_completion(
+        model="gpt-3.5-turbo-instruct",
+        prompt="good morning",
+        max_tokens=10,
+        logprobs=10,
+        **legacy_completion_api.options,
+    )
+    assert legacy_completion_api.requests[0].logprobs == 10
+    assert legacy_completion_api.requests[0].max_tokens == 10
+    assert response.choices[0].text == LEGACY_COMPLETION_TEXT
+    assert response.choices[0].logprobs.token_logprobs == [-0.25]
 
 
 # test_text_completion_basic()
 
 
-def test_completion_text_003_prompt_array():
-    try:
-        litellm.set_verbose = False
-        response = text_completion(
-            model="gpt-3.5-turbo-instruct",
-            prompt=token_prompt,  # token prompt is a 2d list
-        )
-        print("\n\n response")
-
-        print(response)
-        # response_str = response["choices"][0]["text"]
-    except Exception as e:
-        pytest.fail(f"Error occurred: {e}")
+def test_completion_text_003_prompt_array(legacy_completion_api: LegacyCompletionAPI) -> None:
+    response: Final = text_completion(
+        model="gpt-3.5-turbo-instruct",
+        prompt=token_prompt,
+        **legacy_completion_api.options,
+    )
+    assert legacy_completion_api.requests[0].prompt == tuple(tuple(prompt) for prompt in token_prompt)
+    assert len(response.choices) == len(token_prompt)
+    assert all(choice.text == LEGACY_COMPLETION_TEXT for choice in response.choices)
 
 
 # test_completion_text_003_prompt_array()
@@ -4048,7 +4020,7 @@ def test_async_text_completion_together_ai():
 # test_async_text_completion()
 
 
-def test_async_text_completion_stream():
+def test_async_text_completion_stream(legacy_completion_api: LegacyCompletionAPI) -> None:
     # tests atext_completion + streaming - assert only one finish reason sent
     litellm.set_verbose = False
     print("test_async_text_completion with stream")
@@ -4059,6 +4031,7 @@ def test_async_text_completion_stream():
                 model="gpt-3.5-turbo-instruct",
                 prompt="good morning",
                 stream=True,
+                **legacy_completion_api.options,
             )
             print(f"response: {response}")
 
@@ -4072,6 +4045,8 @@ def test_async_text_completion_stream():
             assert (
                 num_finish_reason == 1
             ), f"expected only one finish reason. Got {num_finish_reason}"
+            assert legacy_completion_api.requests[0].stream is True
+            assert legacy_completion_api.requests[0].prompt == "good morning"
         except Exception as e:
             pytest.fail(f"GOT exception for gpt-3.5 instruct In streaming{e}")
 
@@ -4175,7 +4150,7 @@ def test_completion_fireworks_ai_multiple_choices():
 
 
 @pytest.mark.parametrize("stream", [True, False])
-def test_text_completion_with_echo(stream):
+def test_text_completion_with_echo(stream: bool, legacy_completion_api: LegacyCompletionAPI) -> None:
     litellm.set_verbose = True
     response = litellm.text_completion(
         model="davinci-002",
@@ -4185,6 +4160,7 @@ def test_text_completion_with_echo(stream):
         logprobs=1,  # return log prob
         echo=True,  # if True, return the prompt as well
         stream=stream,
+        **legacy_completion_api.options,
     )
     print(response)
 
@@ -4193,6 +4169,9 @@ def test_text_completion_with_echo(stream):
             print(chunk)
     else:
         assert isinstance(response, TextCompletionResponse)
+        assert response.choices[0].text == "hello " + LEGACY_COMPLETION_TEXT
+    assert legacy_completion_api.requests[0].echo is True
+    assert legacy_completion_api.requests[0].logprobs == 1
 
 
 def test_text_completion_ollama():

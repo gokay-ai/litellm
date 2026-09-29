@@ -16,6 +16,8 @@ import importlib
 import os
 
 import pytest
+import respx
+from tests.local_testing.completion_fixtures import LEGACY_COMPLETION_BASE, LegacyCompletionAPI, completion_reply
 
 import litellm
 from litellm.litellm_core_utils.logging_worker import GLOBAL_LOGGING_WORKER
@@ -52,6 +54,13 @@ from tests._vcr_conftest_common import (  # noqa: E402,F401
     vcr_config_dict,
 )
 from tests.fake_openai_endpoint import ensure_fake_openai_endpoint  # noqa: E402
+
+
+@pytest.fixture
+def legacy_completion_api(respx_mock: respx.MockRouter) -> LegacyCompletionAPI:
+    return LegacyCompletionAPI(
+        respx_mock.post(f"{LEGACY_COMPLETION_BASE}/completions").mock(side_effect=completion_reply)
+    )
 
 
 @pytest.fixture(scope="session", autouse=True)
