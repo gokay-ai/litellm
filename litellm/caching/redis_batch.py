@@ -416,10 +416,12 @@ class RequestRedisBatches:
 
     def post_call(self, redis_cache: RedisCache) -> RedisBatch:
         key: Final = _backend_key(redis_cache)
-        batch = self._post_call.get(key)
-        if batch is None:
-            batch = RedisBatch(redis_cache, name="post_call_redis_batch")
-            self._post_call[key] = batch
+        existing: Final = self._post_call.get(key)
+        batch: Final = (
+            existing
+            if existing is not None
+            else self._post_call.setdefault(key, RedisBatch(redis_cache, name="post_call_redis_batch"))
+        )
         if self._deadline is None:
             self._deadline = asyncio.get_running_loop().call_later(self.post_call_deadline, self._flush_on_deadline)
         _open_post_call.add(self)
