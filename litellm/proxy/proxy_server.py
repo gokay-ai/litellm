@@ -3822,8 +3822,8 @@ _UPDATE_CACHE_PREFETCH_SLOT: Final = "update_cache_read"
 
 
 async def arm_update_cache_read(keys: Sequence[str], cache: DualCache | None = None) -> None:
-    """Declares the ``update_cache`` read on the request pipeline before the spend counters are settled, so it
-    rides the same round trip as their reconcile read instead of its own."""
+    """Declares the ``update_cache`` read on the request pipeline once the spend is persisted, so it rides the same
+    round trip as the post-call spend counter read instead of its own."""
     request: Final = active_request_redis_batches()
     target: Final = user_api_key_cache if cache is None else cache
     if request is None or target.redis_cache is None or not keys:

@@ -9,6 +9,7 @@ import datetime
 import hashlib
 import json
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -500,3 +501,75 @@ async def test_an_update_cache_read_armed_for_other_keys_is_ignored_and_the_read
 
     assert values == {"team_id:t1": {"spend": 2.0}}
     assert ("MGET", ("team_id:t1",)) in redis_cache.alone
+
+
+@pytest.mark.asyncio
+async def test_the_update_cache_read_sees_a_cached_spend_written_while_the_spend_was_persisted(monkeypatch):
+    from litellm.proxy import proxy_server
+    from litellm.proxy.hooks.proxy_track_cost_callback import _update_database_and_spend_counters
+
+    cached_user_spend = {"user-1": 1.0}
+
+    def replies(command: tuple[Any, ...]) -> Any:
+        if command[0] == "MGET":
+            return [
+                json.dumps({"spend": cached_user_spend[key]}) if key in cached_user_spend else b"0.5"
+                for key in command[1:]
+            ]
+        return _ok_replies(command)
+
+    client = FakeClient(replies)
+    redis_cache = PostCallFakeRedisCache(client)
+    spend_cache = DualCache()
+    spend_cache.attach_redis_cache(redis_cache)
+    user_cache = DualCache()
+    user_cache.attach_redis_cache(redis_cache)
+    monkeypatch.setattr(proxy_server, "spend_counter_cache", spend_cache)
+    monkeypatch.setattr(proxy_server, "user_api_key_cache", user_cache)
+
+    async def _read_on_the_request_pipeline_then_a_concurrent_callback_writes_the_user(**kwargs: object) -> bool:
+        request = active_request_redis_batches()
+        assert request is not None
+        await request.batch(redis_cache).mget(["key-object"])
+        cached_user_spend["user-1"] = 5.0
+        return True
+
+    proxy_logging_obj = MagicMock()
+    proxy_logging_obj.db_spend_update_writer.update_database = AsyncMock(
+        side_effect=_read_on_the_request_pipeline_then_a_concurrent_callback_writes_the_user
+    )
+    reservation = {
+        "reserved_cost": 0.5,
+        "entries": [
+            {
+                "counter_key": "spend:key:k1",
+                "entity_type": "Key",
+                "entity_id": "k1",
+                "reserved_cost": 0.5,
+                "applied_adjustment": 0.0,
+            }
+        ],
+        "finalized": False,
+    }
+
+    with request_redis_batch_scope():
+        charged = await _update_database_and_spend_counters(
+            proxy_logging_obj=proxy_logging_obj,
+            increment_spend_counters=proxy_server.increment_spend_counters,
+            user_api_key="k1",
+            user_id="user-1",
+            end_user_id=None,
+            team_id=None,
+            org_id=None,
+            kwargs={},
+            completion_response=None,
+            start_time=datetime.datetime.now(),
+            end_time=datetime.datetime.now(),
+            response_cost=0.2,
+            budget_reservation=reservation,
+            update_cache_read_keys=("user-1",),
+        )
+        values = await proxy_server._read_update_cache_values(("user-1",), None)
+
+    assert charged is True
+    assert values == {"user-1": {"spend": 5.0}}, client.pipelines

@@ -283,7 +283,6 @@ class _ProxyDBLogger(CustomLogger):
     ):
         from litellm.proxy.proxy_server import (
             _update_cache_read_keys,
-            arm_update_cache_read,
             increment_spend_counters,
             proxy_logging_obj,
             update_cache,
@@ -362,15 +361,6 @@ class _ProxyDBLogger(CustomLogger):
                     end_user_id=end_user_id,
                     call_type=call_type,
                 ):
-                    await arm_update_cache_read(
-                        _update_cache_read_keys(
-                            user_id=user_id,
-                            end_user_id=end_user_id,
-                            team_id=team_id,
-                            tags=tags,
-                            response_cost=response_cost,
-                        )
-                    )
                     ## UPDATE DATABASE
                     charged: Final = await _update_database_and_spend_counters(
                         proxy_logging_obj=proxy_logging_obj,
@@ -389,6 +379,13 @@ class _ProxyDBLogger(CustomLogger):
                         request_tags=tags,
                         model_access_groups=model_access_groups,
                         project_id=project_id,
+                        update_cache_read_keys=_update_cache_read_keys(
+                            user_id=user_id,
+                            end_user_id=end_user_id,
+                            team_id=team_id,
+                            tags=tags,
+                            response_cost=response_cost,
+                        ),
                     )
                     if not charged:
                         return
@@ -706,6 +703,7 @@ async def _update_database_and_spend_counters(
     request_tags: list[str] | None = None,
     model_access_groups: Sequence[str] | None = None,
     project_id: str | None = None,
+    update_cache_read_keys: Sequence[str] = (),
 ) -> bool:
     """The reservation is reconciled before the spend is persisted, from its own read. One spend counter batch then
     spans the database write and the counter update, so the post-call counters are read with a single MGET after the
@@ -747,6 +745,7 @@ async def _update_database_and_spend_counters(
             request_tags=request_tags,
             model_access_groups=model_access_groups,
             project_id=project_id,
+            update_cache_read_keys=update_cache_read_keys,
         )
 
 
@@ -767,7 +766,10 @@ async def _update_database_and_spend_counters_in_batch(
     request_tags: list[str] | None,
     model_access_groups: Sequence[str] | None,
     project_id: str | None,
+    update_cache_read_keys: Sequence[str],
 ) -> bool:
+    from litellm.proxy.proxy_server import arm_update_cache_read
+
     try:
         charged: Final = await proxy_logging_obj.db_spend_update_writer.update_database(
             token=user_api_key,
@@ -799,6 +801,7 @@ async def _update_database_and_spend_counters_in_batch(
         await _release_budget_reservation(budget_reservation=budget_reservation)
         return False
 
+    await arm_update_cache_read(update_cache_read_keys)
     try:
         await increment_spend_counters(
             token=user_api_key,
