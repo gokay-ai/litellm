@@ -71,7 +71,6 @@ def print_verbose(print_statement):
 
 
 def _ttl_seconds(raw: object) -> int | None:
-    """Same coercion ``BaseCache.get_ttl`` applies to a caller's ``ttl`` kwarg; ``None`` means the cache default."""
     if not isinstance(raw, (int, float, str)):
         return None
     try:

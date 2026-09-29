@@ -478,7 +478,7 @@ async def test_a_spend_counter_whose_increment_failed_is_invalidated_not_trusted
 
 
 @pytest.mark.asyncio
-async def test_a_cancelled_post_call_flush_keeps_the_spend_counters_it_could_not_settle(monkeypatch):
+async def test_a_cancelled_post_call_flush_keeps_the_shared_spend_counter_and_drops_the_local_copy(monkeypatch):
     from litellm.proxy import proxy_server
 
     redis_cache = PostCallFakeRedisCache(
@@ -494,8 +494,8 @@ async def test_a_cancelled_post_call_flush_keeps_the_spend_counters_it_could_not
         with pytest.raises(asyncio.CancelledError):
             await flush_post_call_redis_batches()
 
-    assert redis_cache.alone == [], "a cancel says nothing about the counter, so it must not be deleted"
-    assert spend_cache.in_memory_cache.get_cache("spend:key:k1") == 3.0
+    assert redis_cache.alone == [], "a cancel says nothing about the shared counter, so Redis keeps it"
+    assert spend_cache.in_memory_cache.get_cache("spend:key:k1") is None, "the local copy is re-read, not trusted"
 
 
 @pytest.mark.asyncio
