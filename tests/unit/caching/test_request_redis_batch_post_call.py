@@ -8,8 +8,7 @@ import asyncio
 import datetime
 import hashlib
 import json
-from collections.abc import Awaitable, Callable, Sequence
-from typing import Any
+from collections.abc import Awaitable, Callable, Mapping, Sequence
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -119,7 +118,7 @@ def _tpm_router(redis_cache: FakeRedisCache) -> tuple[LowestTPMLoggingHandler_v2
     return LowestTPMLoggingHandler_v2(router_cache=router_cache, routing_args={"ttl": 60}), router_cache
 
 
-def _tpm_kwargs() -> dict[str, Any]:
+def _tpm_kwargs() -> Mapping[str, object]:
     return {
         "standard_logging_object": {
             "model_group": "gpt",
