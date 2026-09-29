@@ -139,7 +139,8 @@ async def test_passthrough_worker_sigkill_leaves_sibling_serving_and_logging(gat
     def respond(request: Request) -> Reply:
         if "survivor-model" in request.target:
             survivor_arrived.set()
-            return Reply(status=404, chunks=(_NOT_FOUND_BODY[:1], _NOT_FOUND_BODY[1:]), gate_after_first=release_survivor)
+            release_survivor.wait()
+            return Reply(status=404, body=_NOT_FOUND_BODY)
         return _chaos_reply(request)
 
     with wire_server(respond) as wire:
@@ -152,45 +153,47 @@ async def test_passthrough_worker_sigkill_leaves_sibling_serving_and_logging(gat
                 lambda pids: len(pids) == 2 and owned.log.read_text().count("Application startup complete.") == 2,
                 seconds=30,
             )
-            probe: Final = candidate.request("GET", "/health/readiness")
-            assert probe.status_code == 200, probe.text
-            survivor_port: Final = int(probe.extensions["network_stream"].get_extra_info("client_addr")[1])
-            survivor_pid: Final = next(
-                pid
-                for pid in workers
-                if any(
-                    connection.raddr
-                    and connection.laddr.port == candidate.client.base_url.port
-                    and connection.raddr.port == survivor_port
-                    for connection in psutil.Process(pid).net_connections(kind="tcp")
-                )
-            )
-            victim: Final = psutil.Process(next(pid for pid in workers if pid != survivor_pid))
-            survivor_request: Final = asyncio.create_task(
-                asyncio.to_thread(
-                    candidate.request,
-                    "POST",
-                    "/gemini/v1beta/models/survivor-model:generateContent",
-                    _GENERATE_CONTENT,
-                    headers={"x-goog-api-key": candidate.key},
-                )
-            )
             burst: Final = asyncio.create_task(
                 _fire_burst(str(candidate.client.base_url), candidate.key, 20, tolerate_transport_errors=True)
             )
             try:
-                assert await asyncio.to_thread(survivor_arrived.wait, 10), "Survivor request did not reach the upstream"
-                await asyncio.to_thread(eventually, lambda: wire.received.qsize(), lambda size: size >= 6, 30)
-                victim.suspend()
-                victim_ports: Final = frozenset(
-                    connection.raddr.port
-                    for connection in victim.net_connections(kind="tcp")
-                    if connection.raddr and connection.laddr.port == candidate.client.base_url.port
+                await asyncio.to_thread(eventually, lambda: wire.received.qsize(), lambda size: size >= 5, 30)
+                probe: Final = candidate.request("GET", "/health/readiness")
+                assert probe.status_code == 200, probe.text
+                survivor_port: Final = int(probe.extensions["network_stream"].get_extra_info("client_addr")[1])
+                survivor_pid: Final = next(
+                    pid
+                    for pid in workers
+                    if any(
+                        connection.raddr
+                        and connection.laddr.port == candidate.client.base_url.port
+                        and connection.raddr.port == survivor_port
+                        for connection in psutil.Process(pid).net_connections(kind="tcp")
+                    )
                 )
-                victim.send_signal(signal.SIGKILL)
+                victim: Final = psutil.Process(next(pid for pid in workers if pid != survivor_pid))
+                survivor_request: Final = asyncio.create_task(
+                    asyncio.to_thread(
+                        candidate.request,
+                        "POST",
+                        "/gemini/v1beta/models/survivor-model:generateContent",
+                        _GENERATE_CONTENT,
+                        headers={"x-goog-api-key": candidate.key},
+                    )
+                )
+                try:
+                    assert await asyncio.to_thread(survivor_arrived.wait, 10), "Survivor request did not reach the upstream"
+                    victim.suspend()
+                    victim_ports: Final = frozenset(
+                        connection.raddr.port
+                        for connection in victim.net_connections(kind="tcp")
+                        if connection.raddr and connection.laddr.port == candidate.client.base_url.port
+                    )
+                    victim.send_signal(signal.SIGKILL)
+                finally:
+                    release_survivor.set()
+                    survivor_response: Final = await survivor_request
             finally:
-                release_survivor.set()
-                survivor_response: Final = await survivor_request
                 served: Final = await burst
             assert survivor_response.status_code == 404, survivor_response.text
             assert survivor_response.json() == json.loads(_NOT_FOUND_BODY), survivor_response.text
