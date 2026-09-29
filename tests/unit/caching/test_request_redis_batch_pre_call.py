@@ -6,7 +6,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-from typing import Any
+from typing import Any, Final
 from unittest.mock import AsyncMock
 
 import pytest
@@ -456,8 +456,8 @@ async def test_a_single_lua_group_rides_the_pipeline_with_the_armed_routing_read
 
 
 class _SameServerCache(FakeRedisCache):
-    def __init__(self, client: FakeClient, **redis_kwargs: object) -> None:
-        super().__init__(client)
+    def __init__(self, client: FakeClient, namespace: str | None = None, **redis_kwargs: object) -> None:
+        super().__init__(client, namespace)
         self.redis_kwargs = redis_kwargs
 
 
@@ -475,6 +475,20 @@ async def test_caches_built_from_the_same_connection_settings_share_the_request_
         await asyncio.gather(a, b)
     assert len(client.pipelines) == 1
     assert [c[0] for c in client.pipelines[0].commands] == ["MGET", "MGET"]
+
+
+@pytest.mark.asyncio
+async def test_caches_on_one_server_with_different_namespaces_keep_their_own_key_prefix():
+    proxy_client, router_client = FakeClient(_lua_ok_replies), FakeClient(_lua_ok_replies)
+    proxy_cache = _SameServerCache(proxy_client, namespace="proxy", host="r", port=6379, db=0)
+    router_cache = _SameServerCache(router_client, namespace="router", host="r", port=6379, db=0)
+    with request_redis_batch_scope() as request:
+        await asyncio.gather(request.batch(proxy_cache).mget(["a"]), request.batch(router_cache).mget(["b"]))
+    sent: Final = tuple(
+        tuple(command for pipe in client.pipelines for command in pipe.commands)
+        for client in (proxy_client, router_client)
+    )
+    assert sent == ((("MGET", "proxy:a"),), (("MGET", "router:b"),)), "each cache reads under its own namespace"
 
 
 def _user_entry() -> tuple[_CacheEntry, LiteLLM_UserTable]:
