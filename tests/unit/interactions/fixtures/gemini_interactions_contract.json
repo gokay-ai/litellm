@@ -2,163 +2,299 @@
   "source": {
     "url": "https://ai.google.dev/static/api/interactions.openapi.json",
     "retrieved": "2026-09-29",
-    "normalized_source_sha256": "f22c644df1b74c5e1ec7c9677d83ec219994c2859ac7a055ba9ac042ec1a76dd"
+    "normalized_source_sha256": "f22c644df1b74c5e1ec7c9677d83ec219994c2859ac7a055ba9ac042ec1a76dd",
+    "projection": "ModelInteraction contains request-writable fields only. Required output fields are excluded using readOnly annotations from ModelInteraction and Interaction. Referenced schemas are included. Documentation and SDK metadata are omitted."
   },
   "components": {
     "schemas": {
-      "ModelInteraction": {
+      "AgentOption": {
+        "type": "string",
+        "enum": [
+          "deep-research-pro-preview-12-2025",
+          "deep-research-preview-04-2026",
+          "deep-research-max-preview-04-2026",
+          "antigravity-preview-05-2026"
+        ]
+      },
+      "AllowedTools": {
         "type": "object",
         "properties": {
-          "background": {
-            "type": "boolean",
-            "writeOnly": true
-          },
-          "cached_content": {
-            "type": "string",
-            "deprecated": true
-          },
-          "created": {
-            "type": "string",
-            "readOnly": true
-          },
-          "environment": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/EnvironmentConfig"
-              },
-              {
-                "type": "string"
-              }
-            ]
-          },
-          "environment_id": {
-            "type": "string",
-            "readOnly": true
-          },
-          "generation_config": {
-            "$ref": "#/components/schemas/GenerationConfig",
-            "writeOnly": true
-          },
-          "id": {
-            "type": "string",
-            "readOnly": true
-          },
-          "input": {
-            "$ref": "#/components/schemas/InteractionsInput"
-          },
-          "labels": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "model": {
-            "$ref": "#/components/schemas/ModelOption"
-          },
-          "previous_interaction_id": {
-            "type": "string"
-          },
-          "response_format": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/ResponseFormat"
-              },
-              {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/ResponseFormat"
-                }
-              }
-            ]
-          },
-          "response_mime_type": {
-            "type": "string",
-            "deprecated": true
-          },
-          "response_modalities": {
-            "type": "array",
-            "deprecated": true,
-            "items": {
-              "$ref": "#/components/schemas/ResponseModality"
-            }
-          },
-          "safety_settings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SafetySetting"
-            }
-          },
-          "service_tier": {
-            "$ref": "#/components/schemas/ServiceTier"
-          },
-          "status": {
+          "mode": {
             "type": "string",
             "enum": [
-              "in_progress",
-              "requires_action",
-              "completed",
-              "failed",
-              "cancelled",
-              "incomplete",
-              "budget_exceeded",
-              "queued"
-            ],
-            "readOnly": true
-          },
-          "store": {
-            "type": "boolean",
-            "writeOnly": true
-          },
-          "stream": {
-            "type": "boolean",
-            "writeOnly": true
-          },
-          "system_instruction": {
-            "type": "string"
+              "auto",
+              "any",
+              "none",
+              "validated"
+            ]
           },
           "tools": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Tool"
+              "type": "string"
             }
+          }
+        }
+      },
+      "Annotation": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/FileCitation"
           },
-          "updated": {
+          {
+            "$ref": "#/components/schemas/PlaceCitation"
+          },
+          {
+            "$ref": "#/components/schemas/SpeechAnnotation"
+          },
+          {
+            "$ref": "#/components/schemas/UrlCitation"
+          },
+          {
+            "$ref": "#/components/schemas/WordInfo"
+          }
+        ]
+      },
+      "AntigravityAgentConfig": {
+        "type": "object",
+        "properties": {
+          "max_total_tokens": {
             "type": "string",
-            "readOnly": true
+            "format": "int64"
           },
-          "webhook_config": {
-            "$ref": "#/components/schemas/WebhookConfig"
+          "model": {
+            "type": "string"
+          },
+          "type": {
+            "const": "antigravity"
           }
         },
         "required": [
-          "created",
-          "id",
-          "model",
-          "status",
-          "steps",
-          "updated"
+          "type"
         ]
       },
-      "InteractionsInput": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/Content"
+      "AudioContent": {
+        "type": "object",
+        "properties": {
+          "channels": {
+            "type": "integer",
+            "format": "int32"
           },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Step"
-            }
+          "data": {
+            "type": "string",
+            "format": "byte"
           },
-          {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Content"
-            }
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "audio/wav",
+              "audio/mp3",
+              "audio/aiff",
+              "audio/aac",
+              "audio/ogg",
+              "audio/flac",
+              "audio/mpeg",
+              "audio/m4a",
+              "audio/l16",
+              "audio/opus",
+              "audio/alaw",
+              "audio/mulaw",
+              "audio/webm"
+            ]
           },
-          {
+          "sample_rate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "const": "audio"
+          },
+          "uri": {
             "type": "string"
           }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "AudioResponseFormat": {
+        "type": "object",
+        "properties": {
+          "bit_rate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "uri"
+            ]
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "audio/mp3",
+              "audio/ogg_opus",
+              "audio/l16",
+              "audio/wav",
+              "audio/alaw",
+              "audio/mulaw"
+            ]
+          },
+          "sample_rate": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "const": "audio"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "CodeExecution": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "code_execution"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "CodeExecutionCallStep": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodeExecutionCallStepArguments"
+          },
+          "id": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "code_execution_call"
+          }
+        },
+        "required": [
+          "arguments",
+          "id",
+          "type"
+        ]
+      },
+      "CodeExecutionCallStepArguments": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "language": {
+            "type": "string",
+            "enum": [
+              "python"
+            ]
+          }
+        }
+      },
+      "CodeExecutionResultStep": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "is_error": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "code_execution_result"
+          }
+        },
+        "required": [
+          "call_id",
+          "result",
+          "type"
+        ]
+      },
+      "CodeMenderAgentConfig": {
+        "type": "object",
+        "properties": {
+          "find_request": {
+            "$ref": "#/components/schemas/FindRequest"
+          },
+          "fix_request": {
+            "$ref": "#/components/schemas/FixRequest"
+          },
+          "model": {
+            "type": "string"
+          },
+          "session_config": {
+            "$ref": "#/components/schemas/SessionConfig"
+          },
+          "session_id": {
+            "type": "string"
+          },
+          "type": {
+            "const": "code-mender"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ComputerUse": {
+        "type": "object",
+        "properties": {
+          "disabled_safety_policies": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "financial_transactions",
+                "sensitive_data_modification",
+                "communication_tool",
+                "account_creation",
+                "data_modification",
+                "user_consent_management",
+                "legal_terms_and_agreements"
+              ]
+            }
+          },
+          "enable_prompt_injection_detection": {
+            "type": "boolean"
+          },
+          "environment": {
+            "type": "string",
+            "enum": [
+              "browser",
+              "mobile",
+              "desktop"
+            ]
+          },
+          "excluded_predefined_functions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "type": {
+            "const": "computer_use"
+          }
+        },
+        "required": [
+          "type"
         ]
       },
       "Content": {
@@ -180,126 +316,892 @@
           }
         ]
       },
-      "TextContent": {
+      "DeepResearchAgentConfig": {
         "type": "object",
         "properties": {
-          "annotations": {
+          "collaborative_planning": {
+            "type": "boolean"
+          },
+          "enable_bigquery_tool": {
+            "type": "boolean"
+          },
+          "thinking_summaries": {
+            "$ref": "#/components/schemas/ThinkingSummaries"
+          },
+          "type": {
+            "const": "deep-research"
+          },
+          "visualization": {
+            "type": "string",
+            "enum": [
+              "off",
+              "auto"
+            ]
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "DocumentContent": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "format": "byte"
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "application/pdf",
+              "text/csv"
+            ]
+          },
+          "type": {
+            "const": "document"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "DynamicAgentConfig": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "dynamic"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "additionalProperties": true
+      },
+      "EgressRule": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "type": "string"
+          },
+          "domain": {
+            "type": "string"
+          },
+          "transform": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              },
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        },
+        "required": [
+          "domain"
+        ]
+      },
+      "EnvVar": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "EnvironmentConfig": {
+        "type": "object",
+        "properties": {
+          "env": {
+            "oneOf": [
+              {
+                "type": "object",
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/EnvVar"
+                }
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "environment_id": {
+            "type": "string"
+          },
+          "network": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentNetworkEgressAllowlist"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "disabled"
+                ]
+              }
+            ]
+          },
+          "sources": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Annotation"
+              "$ref": "#/components/schemas/Source"
             }
           },
-          "text": {
+          "type": {
+            "const": "remote"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "EnvironmentNetworkEgressAllowlist": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "allowlist": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/EgressRule"
+                }
+              }
+            }
+          },
+          {
+            "type": "string",
+            "enum": [
+              "disabled"
+            ]
+          }
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ExaAISearchConfig": {
+        "type": "object",
+        "properties": {
+          "api_key": {
+            "type": "string"
+          },
+          "custom_config": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "api_key"
+        ]
+      },
+      "FileCitation": {
+        "type": "object",
+        "properties": {
+          "custom_metadata": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "document_uri": {
+            "type": "string"
+          },
+          "end_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "file_name": {
+            "type": "string"
+          },
+          "media_id": {
+            "type": "string"
+          },
+          "page_number": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "source": {
+            "type": "string"
+          },
+          "start_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "const": "file_citation"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "FileContent": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          }
+        }
+      },
+      "FileSearch": {
+        "type": "object",
+        "properties": {
+          "file_search_store_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "metadata_filter": {
+            "type": "string"
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "const": "file_search"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "FileSearchCallStep": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "file_search_call"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ]
+      },
+      "FileSearchResultStep": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "file_search_result"
+          }
+        },
+        "required": [
+          "call_id",
+          "type"
+        ]
+      },
+      "Filter": {
+        "type": "object",
+        "properties": {
+          "metadata_filter": {
+            "type": "string"
+          },
+          "vector_distance_threshold": {
+            "type": "number",
+            "format": "double"
+          },
+          "vector_similarity_threshold": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "FindRequest": {
+        "type": "object",
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "scan",
+              "verify"
+            ]
+          },
+          "source_files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileContent"
+            }
+          }
+        }
+      },
+      "FixRequest": {
+        "type": "object",
+        "properties": {
+          "finding_id": {
+            "type": "string"
+          },
+          "source_files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileContent"
+            }
+          }
+        }
+      },
+      "Function": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "parameters": {},
+          "type": {
+            "const": "function"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "FunctionCallStep": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
             "type": "string"
           },
           "type": {
-            "const": "text"
+            "const": "function_call"
           }
         },
         "required": [
-          "text",
+          "arguments",
+          "id",
+          "name",
           "type"
         ]
       },
-      "Step": {
+      "FunctionResultStep": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "is_error": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FunctionResultSubContent"
+                }
+              },
+              {
+                "type": "object"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "type": {
+            "const": "function_result"
+          }
+        },
+        "required": [
+          "call_id",
+          "result",
+          "type"
+        ]
+      },
+      "FunctionResultSubContent": {
         "oneOf": [
           {
-            "$ref": "#/components/schemas/CodeExecutionCallStep"
+            "$ref": "#/components/schemas/ImageContent"
           },
           {
-            "$ref": "#/components/schemas/CodeExecutionResultStep"
-          },
-          {
-            "$ref": "#/components/schemas/FileSearchCallStep"
-          },
-          {
-            "$ref": "#/components/schemas/FileSearchResultStep"
-          },
-          {
-            "$ref": "#/components/schemas/FunctionCallStep"
-          },
-          {
-            "$ref": "#/components/schemas/FunctionResultStep"
-          },
-          {
-            "$ref": "#/components/schemas/GoogleMapsCallStep"
-          },
-          {
-            "$ref": "#/components/schemas/GoogleMapsResultStep"
-          },
-          {
-            "$ref": "#/components/schemas/GoogleSearchCallStep"
-          },
-          {
-            "$ref": "#/components/schemas/GoogleSearchResultStep"
-          },
-          {
-            "$ref": "#/components/schemas/McpServerToolCallStep"
-          },
-          {
-            "$ref": "#/components/schemas/McpServerToolResultStep"
-          },
-          {
-            "$ref": "#/components/schemas/ModelOutputStep"
-          },
-          {
-            "$ref": "#/components/schemas/ProcessingCallStep"
-          },
-          {
-            "$ref": "#/components/schemas/ProcessingResultStep"
-          },
-          {
-            "$ref": "#/components/schemas/RetrievalCallStep"
-          },
-          {
-            "$ref": "#/components/schemas/RetrievalResultStep"
-          },
-          {
-            "$ref": "#/components/schemas/ThoughtStep"
-          },
-          {
-            "$ref": "#/components/schemas/UrlContextCallStep"
-          },
-          {
-            "$ref": "#/components/schemas/UrlContextResultStep"
-          },
-          {
-            "$ref": "#/components/schemas/UserInputStep"
+            "$ref": "#/components/schemas/TextContent"
           }
         ]
       },
-      "UserInputStep": {
+      "GenerationConfig": {
         "type": "object",
         "properties": {
-          "content": {
+          "image_config": {
+            "$ref": "#/components/schemas/ImageConfig",
+            "deprecated": true
+          },
+          "max_output_tokens": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "seed": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "speech_config": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SpeakerConfig"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SpeechConfig"
+                }
+              }
+            ]
+          },
+          "stop_sequences": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/Content"
+              "type": "string"
             }
           },
+          "thinking_level": {
+            "$ref": "#/components/schemas/ThinkingLevel"
+          },
+          "thinking_summaries": {
+            "$ref": "#/components/schemas/ThinkingSummaries"
+          },
+          "tool_choice": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ToolChoiceConfig"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "any",
+                  "none",
+                  "validated"
+                ]
+              }
+            ]
+          },
+          "transcription_config": {
+            "$ref": "#/components/schemas/TranscriptionConfig"
+          },
+          "video_config": {
+            "$ref": "#/components/schemas/VideoConfig"
+          }
+        }
+      },
+      "GoogleMaps": {
+        "type": "object",
+        "properties": {
+          "enable_widget": {
+            "type": "boolean"
+          },
+          "latitude": {
+            "type": "number",
+            "format": "double"
+          },
+          "longitude": {
+            "type": "number",
+            "format": "double"
+          },
           "type": {
-            "const": "user_input"
+            "const": "google_maps"
           }
         },
         "required": [
           "type"
         ]
       },
-      "ModelOutputStep": {
+      "GoogleMapsCallStep": {
         "type": "object",
         "properties": {
-          "content": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Content"
-            }
+          "arguments": {
+            "$ref": "#/components/schemas/GoogleMapsCallStepArguments"
           },
-          "error": {
-            "$ref": "#/components/schemas/Status",
-            "deprecated": true
+          "id": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
           },
           "type": {
-            "const": "model_output"
+            "const": "google_maps_call"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ]
+      },
+      "GoogleMapsCallStepArguments": {
+        "type": "object",
+        "properties": {
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "GoogleMapsResultItem": {
+        "type": "object",
+        "properties": {
+          "places": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GoogleMapsResultPlaces"
+            }
+          },
+          "widget_context_token": {
+            "type": "string"
+          }
+        }
+      },
+      "GoogleMapsResultPlaces": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "place_id": {
+            "type": "string"
+          },
+          "review_snippets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewSnippet"
+            }
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "GoogleMapsResultStep": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "result": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GoogleMapsResultItem"
+            }
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "google_maps_result"
+          }
+        },
+        "required": [
+          "call_id",
+          "result",
+          "type"
+        ]
+      },
+      "GoogleSearch": {
+        "type": "object",
+        "properties": {
+          "search_types": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "web_search",
+                "image_search",
+                "enterprise_web_search"
+              ]
+            }
+          },
+          "type": {
+            "const": "google_search"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "GoogleSearchCallStep": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/GoogleSearchCallStepArguments"
+          },
+          "id": {
+            "type": "string"
+          },
+          "search_type": {
+            "type": "string",
+            "enum": [
+              "web_search",
+              "image_search",
+              "enterprise_web_search"
+            ]
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "google_search_call"
+          }
+        },
+        "required": [
+          "arguments",
+          "id",
+          "type"
+        ]
+      },
+      "GoogleSearchCallStepArguments": {
+        "type": "object",
+        "properties": {
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "GoogleSearchResultItem": {
+        "type": "object",
+        "properties": {
+          "search_suggestions": {
+            "type": "string"
+          }
+        }
+      },
+      "GoogleSearchResultStep": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "is_error": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GoogleSearchResultItem"
+            }
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "google_search_result"
+          }
+        },
+        "required": [
+          "call_id",
+          "result",
+          "type"
+        ]
+      },
+      "GroundingToolCount": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "google_search",
+              "google_maps",
+              "retrieval"
+            ]
+          }
+        }
+      },
+      "HarmCategory": {
+        "type": "string",
+        "enum": [
+          "hate_speech",
+          "dangerous_content",
+          "harassment",
+          "sexually_explicit",
+          "civic_integrity",
+          "image_hate",
+          "image_dangerous_content",
+          "image_harassment",
+          "image_sexually_explicit",
+          "jailbreak"
+        ]
+      },
+      "HybridSearch": {
+        "type": "object",
+        "properties": {
+          "alpha": {
+            "type": "number",
+            "format": "float"
+          }
+        }
+      },
+      "ImageConfig": {
+        "type": "object",
+        "properties": {
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9",
+              "1:8",
+              "8:1",
+              "1:4",
+              "4:1"
+            ]
+          },
+          "image_size": {
+            "type": "string",
+            "enum": [
+              "1K",
+              "2K",
+              "4K",
+              "512"
+            ]
+          }
+        },
+        "deprecated": true
+      },
+      "ImageContent": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "string",
+            "format": "byte"
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "image/png",
+              "image/jpeg",
+              "image/webp",
+              "image/heic",
+              "image/heif",
+              "image/gif",
+              "image/bmp",
+              "image/tiff"
+            ]
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/MediaResolution"
+          },
+          "type": {
+            "const": "image"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ImageResponseFormat": {
+        "type": "object",
+        "properties": {
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9",
+              "1:8",
+              "8:1",
+              "1:4",
+              "4:1"
+            ]
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "uri"
+            ]
+          },
+          "image_size": {
+            "type": "string",
+            "enum": [
+              "512",
+              "1K",
+              "2K",
+              "4K"
+            ]
+          },
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "image/jpeg"
+            ]
+          },
+          "type": {
+            "const": "image"
           }
         },
         "required": [
@@ -475,6 +1377,1159 @@
           "status"
         ]
       },
+      "InteractionsInput": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/Content"
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            }
+          },
+          {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Content"
+            }
+          },
+          {
+            "type": "string"
+          }
+        ]
+      },
+      "McpServer": {
+        "type": "object",
+        "properties": {
+          "allowed_tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AllowedTools"
+            }
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "const": "mcp_server"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "McpServerToolCallStep": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "server_name": {
+            "type": "string"
+          },
+          "type": {
+            "const": "mcp_server_tool_call"
+          }
+        },
+        "required": [
+          "arguments",
+          "id",
+          "name",
+          "server_name",
+          "type"
+        ]
+      },
+      "McpServerToolResultStep": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "result": {
+            "oneOf": [
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/FunctionResultSubContent"
+                }
+              },
+              {
+                "type": "object"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "server_name": {
+            "type": "string"
+          },
+          "type": {
+            "const": "mcp_server_tool_result"
+          }
+        },
+        "required": [
+          "call_id",
+          "result",
+          "type"
+        ]
+      },
+      "MediaProcessing": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/StaticMediaProcessing"
+          }
+        ]
+      },
+      "MediaResolution": {
+        "type": "string",
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "ultra_high"
+        ]
+      },
+      "ModalityTokens": {
+        "type": "object",
+        "properties": {
+          "modality": {
+            "$ref": "#/components/schemas/ResponseModality"
+          },
+          "tokens": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ModelInteraction": {
+        "type": "object",
+        "properties": {
+          "background": {
+            "type": "boolean",
+            "writeOnly": true
+          },
+          "cached_content": {
+            "type": "string",
+            "deprecated": true
+          },
+          "environment": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EnvironmentConfig"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "generation_config": {
+            "$ref": "#/components/schemas/GenerationConfig",
+            "writeOnly": true
+          },
+          "input": {
+            "$ref": "#/components/schemas/InteractionsInput"
+          },
+          "labels": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelOption"
+          },
+          "previous_interaction_id": {
+            "type": "string"
+          },
+          "response_format": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ResponseFormat"
+              },
+              {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ResponseFormat"
+                }
+              }
+            ]
+          },
+          "response_mime_type": {
+            "type": "string",
+            "deprecated": true
+          },
+          "response_modalities": {
+            "type": "array",
+            "deprecated": true,
+            "items": {
+              "$ref": "#/components/schemas/ResponseModality"
+            }
+          },
+          "safety_settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SafetySetting"
+            }
+          },
+          "service_tier": {
+            "$ref": "#/components/schemas/ServiceTier"
+          },
+          "store": {
+            "type": "boolean",
+            "writeOnly": true
+          },
+          "stream": {
+            "type": "boolean",
+            "writeOnly": true
+          },
+          "system_instruction": {
+            "type": "string"
+          },
+          "tools": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Tool"
+            }
+          },
+          "webhook_config": {
+            "$ref": "#/components/schemas/WebhookConfig"
+          }
+        },
+        "required": [
+          "model"
+        ]
+      },
+      "ModelOption": {
+        "type": "string",
+        "enum": [
+          "gemini-2.5-flash",
+          "gemini-2.5-pro",
+          "gemma-4-26b-a4b-it",
+          "gemma-4-31b-it",
+          "gemini-flash-latest",
+          "gemini-flash-lite-latest",
+          "gemini-pro-latest",
+          "gemini-2.5-flash-lite",
+          "gemini-2.5-flash-image",
+          "gemini-3-flash-preview",
+          "gemini-3.1-pro-preview",
+          "gemini-3.1-pro-preview-customtools",
+          "gemini-3.1-flash-lite",
+          "gemini-3-pro-image",
+          "nano-banana-pro-preview",
+          "gemini-3.1-flash-image",
+          "gemini-3.1-flash-tts-preview",
+          "gemini-3.5-flash",
+          "gemini-3.6-flash",
+          "gemini-3.7-flash",
+          "gemini-3.8-flash",
+          "gemini-3.8-flash-tts",
+          "gemini-3.8-flash-lite-tts",
+          "lyria-3-clip-preview",
+          "lyria-3-pro-preview",
+          "gemini-robotics-er-1.6-preview",
+          "gemini-robotics-er-2-preview"
+        ]
+      },
+      "ModelOutputStep": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Content"
+            }
+          },
+          "error": {
+            "$ref": "#/components/schemas/Status",
+            "deprecated": true
+          },
+          "type": {
+            "const": "model_output"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ParallelAISearchConfig": {
+        "type": "object",
+        "properties": {
+          "api_key": {
+            "type": "string"
+          },
+          "custom_config": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        }
+      },
+      "PlaceCitation": {
+        "type": "object",
+        "properties": {
+          "end_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "place_id": {
+            "type": "string"
+          },
+          "review_snippets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReviewSnippet"
+            }
+          },
+          "start_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "const": "place_citation"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ProcessingCallStep": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "processing_call"
+          }
+        },
+        "required": [
+          "id",
+          "type"
+        ]
+      },
+      "ProcessingResultStep": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "processing_result"
+          }
+        },
+        "required": [
+          "call_id",
+          "type"
+        ]
+      },
+      "RagResource": {
+        "type": "object",
+        "properties": {
+          "rag_corpus": {
+            "type": "string"
+          },
+          "rag_file_ids": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "RagRetrievalConfig": {
+        "type": "object",
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/Filter"
+          },
+          "hybrid_search": {
+            "$ref": "#/components/schemas/HybridSearch"
+          },
+          "ranking": {
+            "$ref": "#/components/schemas/Ranking"
+          },
+          "top_k": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "RagStoreConfig": {
+        "type": "object",
+        "properties": {
+          "rag_resources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RagResource"
+            }
+          },
+          "rag_retrieval_config": {
+            "$ref": "#/components/schemas/RagRetrievalConfig"
+          },
+          "similarity_top_k": {
+            "type": "integer",
+            "deprecated": true,
+            "format": "int32"
+          },
+          "vector_distance_threshold": {
+            "type": "number",
+            "deprecated": true,
+            "format": "double"
+          }
+        }
+      },
+      "RankService": {
+        "type": "object",
+        "properties": {
+          "model_name": {
+            "type": "string"
+          }
+        }
+      },
+      "Ranking": {
+        "type": "object",
+        "properties": {
+          "model_name": {
+            "type": "string"
+          },
+          "rank_service": {
+            "$ref": "#/components/schemas/RankService"
+          },
+          "ranking_config": {
+            "const": "rank_service"
+          }
+        },
+        "required": [
+          "ranking_config"
+        ]
+      },
+      "ResponseFormat": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/AudioResponseFormat"
+          },
+          {
+            "$ref": "#/components/schemas/ImageResponseFormat"
+          },
+          {
+            "$ref": "#/components/schemas/TextResponseFormat"
+          },
+          {
+            "$ref": "#/components/schemas/VideoResponseFormat"
+          },
+          {
+            "type": "object",
+            "additionalProperties": true
+          }
+        ]
+      },
+      "ResponseModality": {
+        "type": "string",
+        "enum": [
+          "text",
+          "image",
+          "audio",
+          "video",
+          "document"
+        ]
+      },
+      "Retrieval": {
+        "type": "object",
+        "properties": {
+          "exa_ai_search_config": {
+            "$ref": "#/components/schemas/ExaAISearchConfig"
+          },
+          "parallel_ai_search_config": {
+            "$ref": "#/components/schemas/ParallelAISearchConfig"
+          },
+          "rag_store_config": {
+            "$ref": "#/components/schemas/RagStoreConfig"
+          },
+          "retrieval_types": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "vertex_ai_search",
+                "rag_store",
+                "exa_ai_search",
+                "parallel_ai_search"
+              ]
+            }
+          },
+          "type": {
+            "const": "retrieval"
+          },
+          "vertex_ai_search_config": {
+            "$ref": "#/components/schemas/VertexAISearchConfig"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "RetrievalCallStep": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/RetrievalStepArguments"
+          },
+          "id": {
+            "type": "string"
+          },
+          "retrieval_type": {
+            "type": "string",
+            "enum": [
+              "vertex_ai_search",
+              "rag_store",
+              "exa_ai_search",
+              "parallel_ai_search"
+            ]
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "retrieval_call"
+          }
+        },
+        "required": [
+          "arguments",
+          "id",
+          "type"
+        ]
+      },
+      "RetrievalResultStep": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "is_error": {
+            "type": "boolean"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "retrieval_result"
+          }
+        },
+        "required": [
+          "call_id",
+          "type"
+        ]
+      },
+      "RetrievalStepArguments": {
+        "type": "object",
+        "properties": {
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "ReviewSnippet": {
+        "type": "object",
+        "properties": {
+          "review_id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "SafetySetting": {
+        "type": "object",
+        "properties": {
+          "method": {
+            "type": "string",
+            "enum": [
+              "severity",
+              "probability"
+            ]
+          },
+          "threshold": {
+            "type": "string",
+            "enum": [
+              "block_low_and_above",
+              "block_medium_and_above",
+              "block_only_high",
+              "block_none",
+              "off"
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/HarmCategory"
+          }
+        },
+        "required": [
+          "threshold",
+          "type"
+        ]
+      },
+      "ServiceTier": {
+        "type": "string",
+        "enum": [
+          "flex",
+          "standard",
+          "priority",
+          "deferred"
+        ]
+      },
+      "SessionConfig": {
+        "type": "object",
+        "properties": {
+          "max_rounds": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "SmartTranscriptionMode": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "smart"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "Source": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string"
+          },
+          "encoding": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "gcs",
+              "inline",
+              "repository",
+              "skill_registry"
+            ]
+          }
+        }
+      },
+      "SpeakerConfig": {
+        "type": "object",
+        "properties": {
+          "speakers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SpeechConfig"
+            }
+          }
+        }
+      },
+      "SpeechAnnotation": {
+        "type": "object",
+        "properties": {
+          "end_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "speaker": {
+            "type": "string"
+          },
+          "start_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "style": {
+            "type": "string"
+          },
+          "type": {
+            "const": "speech_metadata"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "SpeechConfig": {
+        "type": "object",
+        "properties": {
+          "language": {
+            "type": "string"
+          },
+          "speaker": {
+            "type": "string"
+          },
+          "voice": {
+            "type": "string"
+          }
+        }
+      },
+      "StaticMediaProcessing": {
+        "type": "object",
+        "properties": {
+          "end_offset": {
+            "type": "string",
+            "format": "google-duration"
+          },
+          "fps": {
+            "type": "number",
+            "format": "double"
+          },
+          "start_offset": {
+            "type": "string",
+            "format": "google-duration"
+          },
+          "type": {
+            "const": "static"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "Status": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "details": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": {}
+            }
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "Step": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CodeExecutionCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/CodeExecutionResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/FileSearchCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/FileSearchResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/FunctionCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/FunctionResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleMapsCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleMapsResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleSearchCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleSearchResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/McpServerToolCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/McpServerToolResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/ModelOutputStep"
+          },
+          {
+            "$ref": "#/components/schemas/ProcessingCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/ProcessingResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/RetrievalCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/RetrievalResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/ThoughtStep"
+          },
+          {
+            "$ref": "#/components/schemas/UrlContextCallStep"
+          },
+          {
+            "$ref": "#/components/schemas/UrlContextResultStep"
+          },
+          {
+            "$ref": "#/components/schemas/UserInputStep"
+          }
+        ]
+      },
+      "TextContent": {
+        "type": "object",
+        "properties": {
+          "annotations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Annotation"
+            }
+          },
+          "text": {
+            "type": "string"
+          },
+          "type": {
+            "const": "text"
+          }
+        },
+        "required": [
+          "text",
+          "type"
+        ]
+      },
+      "TextResponseFormat": {
+        "type": "object",
+        "properties": {
+          "mime_type": {
+            "type": "string",
+            "enum": [
+              "application/json",
+              "text/plain"
+            ]
+          },
+          "schema": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "type": {
+            "const": "text"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "ThinkingLevel": {
+        "type": "string",
+        "enum": [
+          "minimal",
+          "low",
+          "medium",
+          "high"
+        ]
+      },
+      "ThinkingSummaries": {
+        "type": "string",
+        "enum": [
+          "auto",
+          "none"
+        ]
+      },
+      "ThoughtContent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/ImageContent"
+          },
+          {
+            "$ref": "#/components/schemas/TextContent"
+          }
+        ]
+      },
+      "ThoughtStep": {
+        "type": "object",
+        "properties": {
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "summary": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ThoughtContent"
+            }
+          },
+          "type": {
+            "const": "thought"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "Tool": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CodeExecution"
+          },
+          {
+            "$ref": "#/components/schemas/ComputerUse"
+          },
+          {
+            "$ref": "#/components/schemas/FileSearch"
+          },
+          {
+            "$ref": "#/components/schemas/Function"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleMaps"
+          },
+          {
+            "$ref": "#/components/schemas/GoogleSearch"
+          },
+          {
+            "$ref": "#/components/schemas/McpServer"
+          },
+          {
+            "$ref": "#/components/schemas/Retrieval"
+          },
+          {
+            "$ref": "#/components/schemas/UrlContext"
+          }
+        ]
+      },
+      "ToolChoiceConfig": {
+        "type": "object",
+        "properties": {
+          "allowed_tools": {
+            "$ref": "#/components/schemas/AllowedTools"
+          }
+        }
+      },
+      "TranscriptionConfig": {
+        "type": "object",
+        "properties": {
+          "adaptation_phrases": {
+            "type": "array",
+            "deprecated": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "custom_vocabulary": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "diarization_mode": {
+            "type": "string",
+            "deprecated": true
+          },
+          "language_codes": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "language_hints": {
+            "type": "array",
+            "deprecated": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "mode": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TranscriptionMode"
+              },
+              {
+                "type": "string",
+                "enum": [
+                  "verbatim",
+                  "smart"
+                ]
+              }
+            ]
+          },
+          "timestamp_granularities": {
+            "type": "array",
+            "deprecated": true,
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "TranscriptionMode": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/SmartTranscriptionMode"
+          },
+          {
+            "$ref": "#/components/schemas/VerbatimTranscriptionMode"
+          }
+        ]
+      },
+      "UrlCitation": {
+        "type": "object",
+        "properties": {
+          "end_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "type": {
+            "const": "url_citation"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "UrlContext": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "const": "url_context"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "UrlContextCallArguments": {
+        "type": "object",
+        "properties": {
+          "urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "UrlContextCallStep": {
+        "type": "object",
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/UrlContextCallArguments"
+          },
+          "id": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "url_context_call"
+          }
+        },
+        "required": [
+          "arguments",
+          "id",
+          "type"
+        ]
+      },
+      "UrlContextResult": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "success",
+              "error",
+              "paywall",
+              "unsafe"
+            ]
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "UrlContextResultStep": {
+        "type": "object",
+        "properties": {
+          "call_id": {
+            "type": "string"
+          },
+          "is_error": {
+            "type": "boolean"
+          },
+          "result": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UrlContextResult"
+            }
+          },
+          "signature": {
+            "type": "string",
+            "format": "byte"
+          },
+          "type": {
+            "const": "url_context_result"
+          }
+        },
+        "required": [
+          "call_id",
+          "result",
+          "type"
+        ]
+      },
       "Usage": {
         "type": "object",
         "properties": {
@@ -535,139 +2590,71 @@
         },
         "readOnly": true
       },
-      "Tool": {
-        "oneOf": [
-          {
-            "$ref": "#/components/schemas/CodeExecution"
-          },
-          {
-            "$ref": "#/components/schemas/ComputerUse"
-          },
-          {
-            "$ref": "#/components/schemas/FileSearch"
-          },
-          {
-            "$ref": "#/components/schemas/Function"
-          },
-          {
-            "$ref": "#/components/schemas/GoogleMaps"
-          },
-          {
-            "$ref": "#/components/schemas/GoogleSearch"
-          },
-          {
-            "$ref": "#/components/schemas/McpServer"
-          },
-          {
-            "$ref": "#/components/schemas/Retrieval"
-          },
-          {
-            "$ref": "#/components/schemas/UrlContext"
-          }
-        ]
-      },
-      "AudioContent": {
+      "UserInputStep": {
         "type": "object",
         "properties": {
-          "channels": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "data": {
-            "type": "string",
-            "format": "byte"
-          },
-          "mime_type": {
-            "type": "string",
-            "enum": [
-              "audio/wav",
-              "audio/mp3",
-              "audio/aiff",
-              "audio/aac",
-              "audio/ogg",
-              "audio/flac",
-              "audio/mpeg",
-              "audio/m4a",
-              "audio/l16",
-              "audio/opus",
-              "audio/alaw",
-              "audio/mulaw",
-              "audio/webm"
-            ]
-          },
-          "sample_rate": {
-            "type": "integer",
-            "format": "int32"
+          "content": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Content"
+            }
           },
           "type": {
-            "const": "audio"
-          },
-          "uri": {
-            "type": "string"
+            "const": "user_input"
           }
         },
         "required": [
           "type"
         ]
       },
-      "DocumentContent": {
+      "VerbatimTranscriptionMode": {
         "type": "object",
         "properties": {
-          "data": {
-            "type": "string",
-            "format": "byte"
+          "diarization_mode": {
+            "type": "string"
           },
-          "mime_type": {
-            "type": "string",
-            "enum": [
-              "application/pdf",
-              "text/csv"
-            ]
+          "timestamp_granularities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
           "type": {
-            "const": "document"
-          },
-          "uri": {
-            "type": "string"
+            "const": "verbatim"
           }
         },
         "required": [
           "type"
         ]
       },
-      "ImageContent": {
+      "VertexAISearchConfig": {
         "type": "object",
         "properties": {
-          "data": {
-            "type": "string",
-            "format": "byte"
+          "datastores": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
-          "mime_type": {
-            "type": "string",
-            "enum": [
-              "image/png",
-              "image/jpeg",
-              "image/webp",
-              "image/heic",
-              "image/heif",
-              "image/gif",
-              "image/bmp",
-              "image/tiff"
-            ]
-          },
-          "resolution": {
-            "$ref": "#/components/schemas/MediaResolution"
-          },
-          "type": {
-            "const": "image"
-          },
-          "uri": {
+          "engine": {
             "type": "string"
           }
-        },
-        "required": [
-          "type"
-        ]
+        }
+      },
+      "VideoConfig": {
+        "type": "object",
+        "properties": {
+          "task": {
+            "type": "string",
+            "enum": [
+              "text_to_video",
+              "image_to_video",
+              "reference_to_video",
+              "edit",
+              "extend"
+            ]
+          }
+        }
       },
       "VideoContent": {
         "type": "object",
@@ -715,6 +2702,95 @@
           },
           "uri": {
             "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "VideoResponseFormat": {
+        "type": "object",
+        "properties": {
+          "aspect_ratio": {
+            "type": "string",
+            "enum": [
+              "16:9",
+              "9:16"
+            ]
+          },
+          "delivery": {
+            "type": "string",
+            "enum": [
+              "inline",
+              "uri"
+            ]
+          },
+          "duration": {
+            "type": "string",
+            "format": "google-duration"
+          },
+          "gcs_uri": {
+            "type": "string"
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "360p",
+              "720p",
+              "1080p",
+              "4k"
+            ]
+          },
+          "type": {
+            "const": "video"
+          }
+        },
+        "required": [
+          "type"
+        ]
+      },
+      "WebhookConfig": {
+        "type": "object",
+        "properties": {
+          "uris": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "user_metadata": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        }
+      },
+      "WordInfo": {
+        "type": "object",
+        "properties": {
+          "end_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "end_offset": {
+            "type": "string",
+            "format": "google-duration"
+          },
+          "speaker": {
+            "type": "string"
+          },
+          "start_index": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "start_offset": {
+            "type": "string",
+            "format": "google-duration"
+          },
+          "text": {
+            "type": "string"
+          },
+          "type": {
+            "const": "word_info"
           }
         },
         "required": [

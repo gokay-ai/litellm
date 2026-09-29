@@ -11,10 +11,12 @@ from typing import Final
 from typing import Any, Dict
 
 import pytest
+from jsonschema import Draft202012Validator
 from pydantic import JsonValue, TypeAdapter
 
 from litellm.llms.gemini.interactions.transformation import GoogleAIStudioInteractionsConfig
 from litellm.types.router import GenericLiteLLMParams
+
 
 def _load_openapi_spec_dict() -> dict[str, JsonValue]:
     source: Final = Path(__file__).with_name("fixtures") / "gemini_interactions_contract.json"
@@ -34,26 +36,35 @@ def spec_dict() -> Dict[str, Any]:
     return _load_openapi_spec_dict()
 
 
+@pytest.fixture(scope="module")
+def request_validator(spec_dict: dict[str, JsonValue]) -> Draft202012Validator:
+    schema: Final = {**spec_dict, "$ref": "#/components/schemas/ModelInteraction"}
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(schema)
+
+
 class TestRequestCompliance:
     """Tests that our request bodies match the OpenAPI spec."""
 
-    def test_create_model_interaction_request_schema(self, spec_dict):
+    def test_create_model_interaction_request_schema(self, spec_dict, request_validator: Draft202012Validator):
         """Verify a model request against the captured provider contract."""
         schema = spec_dict["components"]["schemas"]["ModelInteraction"]
 
         # Required fields per spec
+        assert set(schema["required"]) <= schema["properties"].keys()
         assert "model" in schema["required"]
         assert "input" in schema["properties"]
         request: Final = GoogleAIStudioInteractionsConfig().transform_request(
-            model="gemini-contract-test",
+            model="gemini-3.8-flash",
             agent=None,
             input="hello",
             optional_params={"store": False, "stream": False},
             litellm_params=GenericLiteLLMParams(api_key="synthetic-key"),
             headers={},
         )
-        assert request == {"model": "gemini-contract-test", "input": "hello", "store": False, "stream": False}
+        assert request == {"model": "gemini-3.8-flash", "input": "hello", "store": False, "stream": False}
         assert request.keys() <= schema["properties"].keys()
+        request_validator.validate(request)
 
         # Check our supported optional fields exist in spec
         our_optional_fields = [
@@ -74,7 +85,7 @@ class TestRequestCompliance:
             assert field in spec_properties, f"Field '{field}' not in OpenAPI spec"
             print(f"✓ Field '{field}' exists in spec")
 
-    def test_input_types_match_spec(self, spec_dict):
+    def test_input_types_match_spec(self, spec_dict, request_validator: Draft202012Validator):
         """Verify input field supports string, Content, Content[], Turn[]."""
         schema = spec_dict["components"]["schemas"]["ModelInteraction"]
         input_schema = schema["properties"]["input"]
@@ -101,7 +112,7 @@ class TestRequestCompliance:
         assert "array" in input_types, "Input should support array"
         for value in ("hello", [{"type": "text", "text": "hello"}]):
             request: Final = GoogleAIStudioInteractionsConfig().transform_request(
-                model="gemini-contract-test",
+                model="gemini-3.8-flash",
                 agent=None,
                 input=value,
                 optional_params={},
@@ -109,6 +120,7 @@ class TestRequestCompliance:
                 headers={},
             )
             assert request["input"] == value
+            request_validator.validate(request)
 
     def test_content_variants_are_identified_by_their_type_field(self, spec_dict):
         """Verify a Content part can be told apart by its `type`, however the spec spells that.
