@@ -26,7 +26,7 @@ class _RecordingLogger(CustomLogger):
         return [
             call
             for call in self.success_kwargs
-            if call.get("litellm_params", {}).get("metadata", {}).get("is_silent_experiment") is True
+            if (call.get("litellm_params", {}).get("metadata") or {}).get("is_silent_experiment") is True
         ]
 
 

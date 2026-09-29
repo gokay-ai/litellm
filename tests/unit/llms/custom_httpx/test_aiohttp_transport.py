@@ -934,9 +934,13 @@ async def test_replaced_session_emits_no_unclosed_warnings():
     """
     import gc
     import warnings as warnings_mod
+    import weakref
     from unittest.mock import patch
 
     old_session = aiohttp.ClientSession()
+    old_session_ref: Final = weakref.ref(old_session)
+    old_connector: Final = old_session.connector
+    owned_resource_ids: Final = (id(old_session), id(old_connector))
     transport = LiteLLMAiohttpTransport(client=lambda: aiohttp.ClientSession())
     transport.client = old_session
 
@@ -950,19 +954,24 @@ async def test_replaced_session_emits_no_unclosed_warnings():
         for _ in range(3):
             await asyncio.sleep(0)
 
-        del old_session
+        assert old_session.closed, "replaced session must be closed, not leaked"
+        assert old_connector is not None and old_connector.closed
         with warnings_mod.catch_warnings(record=True) as caught:
             warnings_mod.simplefilter("always")
+            del old_session
             gc.collect()
 
         unclosed = [
             str(w.message)
             for w in caught
-            if "Unclosed client session" in str(w.message) or "Unclosed connector" in str(w.message)
+            if id(w.source) in owned_resource_ids
+            and ("Unclosed client session" in str(w.message) or "Unclosed connector" in str(w.message))
         ]
         assert not unclosed, f"leaked session warnings: {unclosed}"
     finally:
         await new_session.close()
+        if (remaining_session := old_session_ref()) is not None:
+            await remaining_session.close()
 
 
 @pytest.mark.asyncio
