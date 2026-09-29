@@ -353,7 +353,7 @@ class DualCache(BaseCache):
         )
 
     async def _apply_batch_get(
-        self, pending: PendingBatchRead, redis_result: dict[str, object] | None, **kwargs: object
+        self, pending: PendingBatchRead, redis_result: Mapping[str, object] | None, **kwargs: object
     ) -> list[object | None]:
         if redis_result is None or all(v is None for v in redis_result.values()):
             return pending.result
@@ -368,7 +368,11 @@ class DualCache(BaseCache):
         return merged
 
     async def declare_batch_get(self, keys: Sequence[str], batch: RedisBatch) -> DeclaredBatchRead:
-        pending: Final = await self._prepare_batch_get(list(keys), local_only=False, throttle_redis=False)
+        pending: Final = await self._prepare_batch_get(
+            list(keys),  # mutable-ok: the shared batch read takes a list
+            local_only=False,
+            throttle_redis=False,
+        )
         return DeclaredBatchRead(
             keys=tuple(keys),
             pending=pending,
@@ -376,7 +380,7 @@ class DualCache(BaseCache):
         )
 
     async def async_resolve_batch_get(self, declared: DeclaredBatchRead) -> list[object | None]:
-        redis_result: Final = {} if declared.result is None else dict(await declared.result)
+        redis_result: Final = None if declared.result is None else await declared.result
         return await self._apply_batch_get(declared.pending, redis_result)
 
     async def async_batch_get_cache(
@@ -587,7 +591,7 @@ class DualCache(BaseCache):
         """Memory is incremented now; the Redis increment rides the request's post-call pipeline when one is
         open, and runs on its own as ``async_increment_cache`` otherwise."""
         await self.async_increment_cache_pipeline_post_call(
-            [RedisPipelineIncrementOperation(key=key, increment_value=value, ttl=ttl)], parent_otel_span
+            (RedisPipelineIncrementOperation(key=key, increment_value=value, ttl=ttl),), parent_otel_span
         )
 
     async def async_increment_cache_pipeline_post_call(
@@ -596,13 +600,14 @@ class DualCache(BaseCache):
         parent_otel_span: Span | None = None,
     ) -> None:
         batch: Final = None if self.redis_cache is None else active_post_call_redis_batch(self.redis_cache)
+        operations: Final = list(increment_list)  # mutable-ok: both increment pipelines take a list
         if batch is None:
-            await self.async_increment_cache_pipeline(list(increment_list), parent_otel_span=parent_otel_span)
+            await self.async_increment_cache_pipeline(operations, parent_otel_span=parent_otel_span)
             return
         try:
             if self.in_memory_cache is not None:
                 await self.in_memory_cache.async_increment_pipeline(
-                    increment_list=list(increment_list), parent_otel_span=parent_otel_span
+                    increment_list=operations, parent_otel_span=parent_otel_span
                 )
         except Exception as e:  # noqa: BLE001  # same tolerance as async_increment_cache_pipeline
             log_redis_failure(verbose_logger, logging.WARNING, "in-memory increment failed", e)

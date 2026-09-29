@@ -3841,7 +3841,7 @@ async def _take_armed_update_cache_read(keys: Sequence[str], cache: DualCache) -
     if not isinstance(armed, DeclaredBatchRead) or armed.keys != tuple(keys):
         return None
     values: Final = await cache.async_resolve_batch_get(armed)
-    return {key: value for key, value in zip(keys, values) if value is not None}
+    return MappingProxyType({key: value for key, value in zip(keys, values) if value is not None})
 
 
 async def _read_update_cache_values(

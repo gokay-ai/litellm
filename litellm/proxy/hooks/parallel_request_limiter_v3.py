@@ -1966,7 +1966,7 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
                     future.exception() if not future.cancelled() else asyncio.CancelledError(),
                 )
 
-        batch.script(PARALLEL_RELEASE_SCRIPT, script, counter_keys, [slot_id for _ in counter_keys]).on_settled(settle)
+        batch.script(PARALLEL_RELEASE_SCRIPT, script, counter_keys, (slot_id,) * len(counter_keys)).on_settled(settle)
         return True
 
     async def _mirror_released_parallel_slots(

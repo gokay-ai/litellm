@@ -33,7 +33,7 @@ from litellm.types.services import ServiceTypes
 
 _T = TypeVar("_T")
 _ScriptArg = str | bytes | int | float
-SettledHook = Callable[[asyncio.Future[_T]], Awaitable[None] | None]
+SettledHook = Callable[[asyncio.Future[_T]], Awaitable[None] | None]  # mutable-ok: Callable params
 POST_CALL_FLUSH_DEADLINE_SECONDS: Final = 1.0
 
 
