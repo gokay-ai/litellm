@@ -8,8 +8,10 @@ different objects. `RoutingReadBatch` fetches both key sets in one
 the usage slice to the strategy, so selection does not read again.
 """
 
-from collections.abc import Mapping
+import itertools
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Final
 
 from litellm._logging import verbose_router_logger
@@ -51,12 +53,13 @@ class RoutingPrefetch:
         redis_cache: Final = litellm_router_instance.cache.redis_cache
         if request is None or redis_cache is None or _PREFETCH_SLOT in request.prefetched:
             return
-        keys: Final = [
+        cooldown_keys: Final = tuple(
             CooldownCache.get_cooldown_cache_key(model_id) for model_id in litellm_router_instance.get_model_ids()
-        ]
-        if usage_selector is not None:
-            tpm_keys, rpm_keys = usage_selector.usage_counter_keys(deployments)
-            keys.extend([*tpm_keys, *rpm_keys])
+        )
+        usage_keys: Final = (
+            () if usage_selector is None else tuple(itertools.chain(*usage_selector.usage_counter_keys(deployments)))
+        )
+        keys: Final = (*cooldown_keys, *usage_keys)
         request.prefetched[_PREFETCH_SLOT] = RoutingPrefetch(
             keys=frozenset(keys), result=request.batch(redis_cache).mget(keys)
         )
@@ -67,7 +70,7 @@ class RoutingPrefetch:
         return request is not None and _PREFETCH_SLOT in request.prefetched
 
     @staticmethod
-    def take(needed: list[str]) -> "RoutingPrefetch | None":
+    def take(needed: Sequence[str]) -> "RoutingPrefetch | None":
         """The armed prefetch when it covers every key this read needs; taken once, so a retry reads fresh."""
         request: Final = active_request_redis_batches()
         if request is None:
@@ -104,10 +107,10 @@ class RoutingReadBatch:
         """
         model_ids: Final = litellm_router_instance.get_model_ids()
         cooldown_keys: Final = [CooldownCache.get_cooldown_cache_key(model_id) for model_id in model_ids]
-        reads: Final[list[tuple[DualCache, list[str]]]] = [
+        reads: Final[list[tuple[DualCache, list[str]]]] = [  # mutable-ok: the usage read is appended below
             (litellm_router_instance.cooldown_cache.cooldown_store, cooldown_keys)
         ]
-        usage_keys: list[str] = []
+        usage_keys: list[str] = []  # mutable-ok: DualCache batch reads take a list
         if self.usage_selector is not None:
             tpm_keys, rpm_keys = self.usage_selector.usage_counter_keys(healthy_deployments)
             usage_keys = tpm_keys + rpm_keys
@@ -120,7 +123,7 @@ class RoutingReadBatch:
             usage_values: Final = results[1]
             self.prefetched_usage = PrefetchedUsage(
                 keys=frozenset(usage_keys),
-                values=None if usage_values is None else dict(zip(usage_keys, usage_values)),
+                values=None if usage_values is None else MappingProxyType(dict(zip(usage_keys, usage_values))),
             )
 
         cooldown_models: Final = litellm_router_instance.cooldown_cache.active_cooldowns_from_results(
@@ -135,7 +138,7 @@ class RoutingReadBatch:
     ) -> list[list[object | None] | None] | None:
         """Serve the reads from the request's armed `RoutingPrefetch`, backfilling each cache's memory tier as
         its own batch read would. None when nothing usable was armed or the prefetch failed."""
-        prefetch: Final = RoutingPrefetch.take([key for _, keys in reads for key in keys])
+        prefetch: Final = RoutingPrefetch.take(tuple(itertools.chain.from_iterable(keys for _, keys in reads)))
         if prefetch is None:
             return None
         try:
@@ -143,9 +146,11 @@ class RoutingReadBatch:
         except Exception as e:  # noqa: BLE001  # the shared read below applies the caches' own Redis fallback
             verbose_router_logger.debug("routing prefetch failed, reading again: %s", e)
             return None
-        results: Final[list[list[object | None] | None]] = []
+        results: Final[list[list[object | None] | None]] = []  # mutable-ok: filled per read below
         for cache, keys in reads:
             pending = await cache._prepare_batch_get(keys, local_only=True)  # pyright: ignore[reportPrivateUsage]  # same two-step read as async_batch_get_cache_shared
-            missed = {key: values.get(key) for key, local in zip(keys, pending.result) if local is None}
+            missed = {  # mutable-ok: _apply_batch_get takes a dict
+                key: values.get(key) for key, local in zip(keys, pending.result) if local is None
+            }
             results.append(await cache._apply_batch_get(pending, missed))  # pyright: ignore[reportPrivateUsage]  # same two-step read as async_batch_get_cache_shared
         return results

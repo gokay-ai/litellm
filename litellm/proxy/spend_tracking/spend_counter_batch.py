@@ -119,7 +119,7 @@ class SpendCounterBatch:
         self._inflight.clear()
         for result in results:
             try:
-                fetched: Mapping[str, float | None] = _CounterValues.validate_python(dict(await result))
+                fetched: Mapping[str, float | None] = _CounterValues.validate_python(await result)
             except Exception as e:  # noqa: BLE001  # per-key reads take over and apply their own Redis fallback
                 verbose_proxy_logger.debug("spend counter batch read failed, falling back to per-key reads: %s", e)
                 continue

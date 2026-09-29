@@ -228,7 +228,7 @@ async def _read_redis_rows(keys: list[str], redis_cache: RedisCache) -> Mapping[
         return await batch.mget(keys)
     except Exception as e:  # noqa: BLE001  # the DB fill below takes over, as it does after a failed MGET today
         verbose_proxy_logger.debug("auth prefetch Redis read failed, filling from the database: %s", e)
-        return {}
+        return MappingProxyType({})
 
 
 async def _fill_from_redis(entries: Sequence[_CacheEntry], redis_cache: RedisCache, memory: _InMemoryCache) -> None:

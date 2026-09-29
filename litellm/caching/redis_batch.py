@@ -18,7 +18,7 @@ from collections.abc import Awaitable, Callable, Generator, Mapping, Sequence
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
 from datetime import timedelta
-from types import TracebackType
+from types import MappingProxyType, TracebackType
 from typing import Final, Generic, Protocol, TypeVar
 
 from litellm._logging import verbose_logger
@@ -110,17 +110,19 @@ class _MGet(_Op[Mapping[str, object]]):
         self._keys: Final[tuple[str, ...]] = tuple(dict.fromkeys(keys))
 
     def enqueue(self, pipe: _RedisPipeline) -> int:
-        pipe.mget([self._redis_cache.check_and_fix_namespace(key=key) for key in self._keys])
+        pipe.mget(tuple(self._redis_cache.check_and_fix_namespace(key=key) for key in self._keys))
         return 1
 
     def resolve(self, replies: Sequence[object]) -> Mapping[str, object]:
         values: Final = replies[0]
         if not isinstance(values, (list, tuple)):
             raise TypeError(f"MGET reply is not a list: {type(values).__name__}")
-        return {key: self._redis_cache._get_cache_logic(value) for key, value in zip(self._keys, values)}  # pyright: ignore[reportPrivateUsage, reportUnknownMemberType, reportUnknownArgumentType]  # shared decode with async_batch_get_cache
+        return MappingProxyType(
+            {key: self._redis_cache._get_cache_logic(value) for key, value in zip(self._keys, values)}  # pyright: ignore[reportPrivateUsage, reportUnknownMemberType, reportUnknownArgumentType]  # shared decode with async_batch_get_cache
+        )
 
     async def run_alone(self) -> Mapping[str, object]:
-        found: Mapping[str, object] = await self._redis_cache.async_batch_get_cache(key_list=list(self._keys))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]  # untyped cache API
+        found: Mapping[str, object] = await self._redis_cache.async_batch_get_cache(key_list=list(self._keys))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]  # untyped cache API  # mutable-ok: the cache API takes a list
         if any(key not in found for key in self._keys):
             raise ConnectionError("batch get did not return every key")
         return found
@@ -212,7 +214,7 @@ class _Set(_Op[None]):
         return None
 
     async def run_alone(self) -> None:
-        await self._redis_cache.async_set_cache_pipeline_with_ttls([(self._key, self._value, self._ttl)])
+        await self._redis_cache.async_set_cache_pipeline_with_ttls(((self._key, self._value, self._ttl),))
 
 
 class BatchResult(Generic[_T]):
