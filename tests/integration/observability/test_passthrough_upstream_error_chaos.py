@@ -134,16 +134,23 @@ async def test_passthrough_worker_sigkill_leaves_sibling_serving_and_logging(gat
     config: Final = yaml.safe_load(Path("tests/integration/proxy_config.yaml").read_text())
     path: Final = tmp_path / "chaos-kill.yaml"
     survivor_arrived: Final = threading.Event()
-    release_survivor: Final = threading.Event()
+    release_upstream: Final = threading.Event()
 
     def respond(request: Request) -> Reply:
         if "survivor-model" in request.target:
             survivor_arrived.set()
-            release_survivor.wait()
-            return Reply(status=404, body=_NOT_FOUND_BODY)
+        release_upstream.wait()
         return _chaos_reply(request)
 
     with wire_server(respond) as wire:
+        upstream_port: Final = int(wire.url.rsplit(":", 1)[1])
+
+        def has_upstream_request(pid: int) -> bool:
+            return any(
+                connection.raddr and connection.raddr.port == upstream_port and connection.status == psutil.CONN_ESTABLISHED
+                for connection in psutil.Process(pid).net_connections(kind="tcp")
+            )
+
         config["environment_variables"] = {"GEMINI_API_BASE": wire.url, "GEMINI_API_KEY": "scripted"}
         path.write_text(yaml.safe_dump(config))
         with owned_proxy_process(gateway, tmp_path, {}, config=path, workers=2) as owned:
@@ -157,7 +164,12 @@ async def test_passthrough_worker_sigkill_leaves_sibling_serving_and_logging(gat
                 _fire_burst(str(candidate.client.base_url), candidate.key, 20, tolerate_transport_errors=True)
             )
             try:
-                await asyncio.to_thread(eventually, lambda: wire.received.qsize(), lambda size: size >= 5, 30)
+                await asyncio.to_thread(
+                    eventually,
+                    lambda: wire.received.qsize() >= 5 and all(has_upstream_request(pid) for pid in workers),
+                    bool,
+                    10,
+                )
                 probe: Final = candidate.request("GET", "/health/readiness")
                 assert probe.status_code == 200, probe.text
                 survivor_port: Final = int(probe.extensions["network_stream"].get_extra_info("client_addr")[1])
@@ -189,11 +201,13 @@ async def test_passthrough_worker_sigkill_leaves_sibling_serving_and_logging(gat
                         for connection in victim.net_connections(kind="tcp")
                         if connection.raddr and connection.laddr.port == candidate.client.base_url.port
                     )
+                    assert victim_ports and has_upstream_request(victim.pid), "Victim had no in-flight upstream request"
                     victim.send_signal(signal.SIGKILL)
                 finally:
-                    release_survivor.set()
+                    release_upstream.set()
                     survivor_response: Final = await survivor_request
             finally:
+                release_upstream.set()
                 served: Final = await burst
             assert survivor_response.status_code == 404, survivor_response.text
             assert survivor_response.json() == json.loads(_NOT_FOUND_BODY), survivor_response.text
