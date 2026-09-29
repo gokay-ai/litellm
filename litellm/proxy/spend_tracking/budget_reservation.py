@@ -4,7 +4,7 @@ import asyncio
 import json
 import math
 import time
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from types import MappingProxyType
@@ -913,11 +913,15 @@ async def _initialize_reservation_counters(
 ) -> tuple[_BudgetCounter, ...]:
     """The counters whose current value is loaded, in order; one that cannot be loaded is skipped (or rejects the
     request under fail-closed enforcement) exactly as it was when each counter was reserved on its own."""
-    if not counters:
-        return ()
-    counter: Final = counters[0]
-    head: Final = (counter,) if await _reservation_counter_loaded(counter, fail_closed_budget_enforcement) else ()
-    return head + await _initialize_reservation_counters(counters[1:], fail_closed_budget_enforcement)
+    return tuple([counter async for counter in _loaded_reservation_counters(counters, fail_closed_budget_enforcement)])
+
+
+async def _loaded_reservation_counters(
+    counters: Sequence[_BudgetCounter], fail_closed_budget_enforcement: bool
+) -> AsyncIterator[_BudgetCounter]:
+    for counter in counters:
+        if await _reservation_counter_loaded(counter, fail_closed_budget_enforcement):
+            yield counter
 
 
 async def _reservation_counter_loaded(counter: _BudgetCounter, fail_closed_budget_enforcement: bool) -> bool:
