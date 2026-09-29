@@ -1880,8 +1880,8 @@ async def test_should_raise_503_when_counter_increment_fails_and_fail_closed(
 async def test_fail_closed_releases_earlier_counters_before_503(
     spend_counter_state,
 ):
-    """#33923: when a later counter cannot be reserved in strict mode, no counter may keep a
-    reservation once the 503 propagates."""
+    """#33923: when a later counter cannot be loaded in strict mode, the 503 is raised before any counter is
+    reserved."""
     counter_cache, key_cache = spend_counter_state
     proxy_logging_obj = ProxyLogging(user_api_key_cache=key_cache)
     valid_token = UserAPIKeyAuth(
@@ -1915,12 +1915,8 @@ async def test_fail_closed_releases_earlier_counters_before_503(
             )
 
     assert exc_info.value.status_code == 503
-    assert (
-        counter_cache.in_memory_cache.get_cache(
-            key="spend:key:key-budget-fail-closed-release"
-        )
-        or 0.0
-    ) == 0.0
+    assert counter_cache.in_memory_cache.get_cache(key="spend:key:key-budget-fail-closed-release") is None
+    assert counter_cache.in_memory_cache.get_cache(key="spend:key:key-budget-fail-closed-release:window:1h") is None
 
 
 @pytest.mark.asyncio
