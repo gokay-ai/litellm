@@ -9293,28 +9293,29 @@ async def test_websocket_auth_hands_the_reservation_to_the_socket_state():
 
 
 @pytest.mark.asyncio
-async def test_centralized_common_checks_keep_the_spend_counter_batch_open_through_budget_reservation():
-    """The admission MGET is still live when the budget reservation runs, so its warm checks read the same
-    snapshot instead of paying their own round trips; the batch closes once the reservation is done."""
+async def test_admission_and_budget_reservation_read_the_key_spend_counter_with_one_redis_mget():
     from fastapi import Request
     from starlette.datastructures import URL
 
     import litellm.proxy.proxy_server as _proxy_server_mod
     from litellm.proxy.spend_tracking.spend_counter_batch import (
-        active_spend_counter_batch,
+        read_batched_spend_counter,
         spend_counter_batch_scope,
     )
 
     token = UserAPIKeyAuth(api_key="sk-test", token="hashed", max_budget=10.0)
     request = Request(scope={"type": "http"})
     request._url = URL(url="/chat/completions")
-    batch_open_during_reservation: list[bool] = []
+    reads: list[tuple[str, tuple[float | None, bool] | None]] = []
 
-    async def _reserve(**kwargs):
-        batch = active_spend_counter_batch()
-        batch_open_during_reservation.append(batch is not None and batch.is_open)
+    async def _admission_reads_spend(**kwargs):
+        reads.append(("admission", await read_batched_spend_counter("spend:key:hashed")))
+
+    async def _reservation_reads_spend(**kwargs):
+        reads.append(("reservation", await read_batched_spend_counter("spend:key:hashed")))
 
     redis = MagicMock()
+    redis.async_batch_get_cache = AsyncMock(return_value={"spend:key:hashed": 4.0})
     attrs = {
         **_proxy_attrs_for_centralized_checks(user_custom_auth=None),
         "prisma_client": MagicMock(),
@@ -9325,13 +9326,13 @@ async def test_centralized_common_checks_keep_the_spend_counter_batch_open_throu
         for k, v in attrs.items():
             setattr(_proxy_server_mod, k, v)
         with (
-            patch(  # test-quality-ok: authorization has its own tests above; this one checks the batch lifetime
+            patch(  # test-quality-ok: authorization has its own tests above; this one checks the shared counter read
                 "litellm.proxy.auth.user_api_key_auth.common_checks",
-                new_callable=AsyncMock,
+                new=AsyncMock(side_effect=_admission_reads_spend),
             ),
             patch(  # test-quality-ok: the reservation helper imports reserve_budget_for_request in its body
                 "litellm.proxy.spend_tracking.budget_reservation.reserve_budget_for_request",
-                side_effect=_reserve,
+                side_effect=_reservation_reads_spend,
             ),
             spend_counter_batch_scope(redis),
         ):
@@ -9341,11 +9342,15 @@ async def test_centralized_common_checks_keep_the_spend_counter_batch_open_throu
                 request_data={"model": "gpt-5.4-mini", "messages": [{"role": "user", "content": "hi"}]},
                 route="/chat/completions",
             )
-            batch = active_spend_counter_batch()
-            assert batch is not None and batch.is_open is False
+            reads.append(("after admission", await read_batched_spend_counter("spend:key:hashed")))
     finally:
-        for k, v in originals.items():
-            setattr(_proxy_server_mod, k, v)
+        for k, v in attrs.items():
+            setattr(_proxy_server_mod, k, originals[k])
 
-    assert batch_open_during_reservation == [True]
-    assert active_spend_counter_batch() is None
+    assert reads == [
+        ("admission", (4.0, True)),
+        ("reservation", (4.0, True)),
+        ("after admission", None),
+    ], "admission and reservation share one snapshot, and read-then-write callers go to Redis once it closes"
+    assert redis.async_batch_get_cache.await_count == 1
+    assert "spend:key:hashed" in redis.async_batch_get_cache.await_args.kwargs["key_list"]
