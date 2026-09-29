@@ -696,11 +696,16 @@ async def _update_database_and_spend_counters(
     model_access_groups: Sequence[str] | None = None,
     project_id: str | None = None,
 ) -> bool:
-    """One spend counter batch spans the reservation reconcile and the counter update, so the reserved counters and
-    the post-call counters are read with a single MGET and their increments leave in a single pipeline."""
+    """The reservation is reconciled before the spend is persisted, from its own read. One spend counter batch then
+    spans the database write and the counter update, so the post-call counters are read with a single MGET after the
+    write and their increments leave in a single pipeline."""
     from litellm.proxy.proxy_server import spend_counter_cache
     from litellm.proxy.spend_tracking.budget_reservation import get_reserved_counter_keys
 
+    if budget_reservation is not None:
+        await _reconcile_budget_reservation_before_db_update(
+            budget_reservation=budget_reservation, response_cost=response_cost
+        )
     counter_keys: Final = frozenset(
         get_reserved_counter_keys(budget_reservation=budget_reservation)
     ) | post_call_counter_keys(
@@ -752,10 +757,6 @@ async def _update_database_and_spend_counters_in_batch(
     model_access_groups: Sequence[str] | None,
     project_id: str | None,
 ) -> bool:
-    if budget_reservation is not None:
-        await _reconcile_budget_reservation_before_db_update(
-            budget_reservation=budget_reservation, response_cost=response_cost
-        )
     try:
         charged: Final = await proxy_logging_obj.db_spend_update_writer.update_database(
             token=user_api_key,
@@ -819,8 +820,7 @@ async def _reconcile_budget_reservation_before_db_update(
     budget_reservation: dict,  # mutable-ok: reconcile_budget_reservation stamps applied_adjustment on the caller's shared reservation dict
     response_cost: float,
 ) -> None:
-    """Reads the reserved counters into the open batch and reseeds any that were flushed since reservation; the
-    adjustments themselves are written by ``increment_spend_counters`` in the same pipeline as its increments, or by
+    """Reseeds the reserved counters that were flushed since reservation; the adjustments themselves are written by ``increment_spend_counters`` in the same pipeline as its increments, or by
     the release / invalidation that runs when the spend write fails."""
     from litellm.proxy.spend_tracking.budget_reservation import reconcile_budget_reservation
 
