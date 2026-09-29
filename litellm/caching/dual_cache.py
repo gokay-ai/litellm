@@ -9,6 +9,7 @@ Has 4 primary methods:
 """
 
 import asyncio
+import itertools
 import logging
 import time
 from collections.abc import Mapping, Sequence
@@ -443,7 +444,9 @@ class DualCache(BaseCache):
             pendings.append((index, cache, pending))
             results[index] = pending.result
 
-        redis_keys: Final = list(dict.fromkeys(key for _, _, pending in pendings for key in pending.redis_keys))
+        redis_keys: Final = list(
+            dict.fromkeys(itertools.chain.from_iterable(pending.redis_keys for _, _, pending in pendings))
+        )
         if shared_redis is None or not redis_keys:
             return results
         try:
