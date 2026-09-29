@@ -1,6 +1,7 @@
 # What is this?
 ## Unit testing for the 'get_model_info()' function
 import os
+from collections.abc import Collection, Mapping
 
 
 from typing import List, Dict, Any
@@ -9,6 +10,8 @@ import pytest
 
 import litellm
 from litellm import get_model_info
+from litellm.llms.bedrock.common_utils import BedrockModelInfo
+from litellm.types.utils import ModelInfoBase
 from litellm.utils import _invalidate_model_cost_lowercase_map
 from unittest.mock import MagicMock, patch
 
@@ -116,26 +119,27 @@ def test_get_model_info_ft_model_with_provider_prefix():
 
 
 def _enforce_bedrock_converse_models(
-    model_cost: List[Dict[str, Any]], whitelist_models: List[str]
-):
+    model_cost: Mapping[str, ModelInfoBase], whitelist_models: Collection[str]
+) -> None:
     """
-    Assert all new bedrock chat models are added as `bedrock_converse` unless explicitly whitelisted.
+    Assert unlisted Bedrock chat models automatically route to Converse.
     """
     # Check for unwhitelisted models
-    for model, info in litellm.model_cost.items():
+    for model, info in model_cost.items():
         if (
             info["litellm_provider"] == "bedrock"
             and info["mode"] == "chat"
             and model not in whitelist_models
+            and BedrockModelInfo.get_bedrock_route(model) != "converse"
         ):
             raise AssertionError(
-                f"New bedrock chat model detected: {model}. Please set `litellm_provider='bedrock_converse'` for this model."
+                f"Unlisted Bedrock chat model does not route to Converse: {model}"
             )
 
 
 def test_model_info_bedrock_converse(monkeypatch):
     """
-    Assert all new bedrock chat models are added as `bedrock_converse` unless explicitly whitelisted.
+    Assert unlisted Bedrock chat models automatically route to Converse.
 
     This ensures they are automatically routed to the converse endpoint.
     """
@@ -173,7 +177,7 @@ def test_model_info_bedrock_converse_enforcement(monkeypatch):
             whitelist_models = [line.strip() for line in file.readlines()]
 
         # Check for unwhitelisted models
-        with pytest.raises(AssertionError):
+        with pytest.raises(AssertionError, match=r"fake\.bedrock-chat-model"):
             _enforce_bedrock_converse_models(
                 model_cost=litellm.model_cost, whitelist_models=whitelist_models
             )
