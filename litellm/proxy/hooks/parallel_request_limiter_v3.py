@@ -485,7 +485,7 @@ def _as_counter_values(reply: object) -> list[CacheCounterValue]:
     """A Lua reply read back off the pipeline is the same array the script returns when called directly."""
     if not isinstance(reply, (list, tuple)):
         raise TypeError(f"rate limiter script reply is not a list: {type(reply).__name__}")
-    values: Final[list[CacheCounterValue]] = []
+    values: Final[list[CacheCounterValue]] = []  # mutable-ok: each element is narrowed before it is kept
     for value in reply:  # pyright: ignore[reportUnknownVariableType]  # raw Redis reply
         if not isinstance(value, (int, float, str, bytes)):
             raise TypeError(f"rate limiter script reply holds {type(value).__name__}")  # pyright: ignore[reportUnknownArgumentType]  # raw Redis reply
@@ -1347,15 +1347,15 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
         source: str,
         run: RegisteredScript,
         calls: Sequence[tuple[Sequence[str], Sequence[int]]],
-    ) -> list[BatchResult[object] | None]:
+    ) -> tuple[BatchResult[object] | None, ...]:
         """Declare one Lua call per group on the request's Redis batch, so all groups share one round trip
         with whatever else the request declared (the routing read). Returns ``None`` per call when no batch
         is open, and the caller runs the script directly as before."""
         redis_cache: Final = self.internal_usage_cache.dual_cache.redis_cache
         batch: Final = None if redis_cache is None else active_request_redis_batch(redis_cache)
         if batch is None:
-            return [None] * len(calls)
-        return [batch.script(source, run, keys, args) for keys, args in calls]
+            return (None,) * len(calls)
+        return tuple(batch.script(source, run, keys, args) for keys, args in calls)
 
     def _group_keys_by_hash_tag(self, keys: list[str]) -> dict[str, list[str]]:
         """
@@ -1470,11 +1470,11 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
 
         key_groups: Final = list(self._group_keys_by_hash_tag(keys_to_fetch).items())
         all_cache_values: Final[list[CacheCounterValue | None]] = []
-        args: Final[list[int]] = [now_int, self.window_size]
+        args: Final = (now_int, self.window_size)
         pipelined: Final = self._pipeline_scripts(
             BATCH_RATE_LIMITER_SCRIPT,
             self.batch_rate_limiter_script,
-            [(group_keys, args) for _tag, group_keys in key_groups],
+            tuple((group_keys, args) for _tag, group_keys in key_groups),
         )
 
         for index, ((hash_tag, group_keys), group_result) in enumerate(zip(key_groups, pipelined)):
@@ -2160,7 +2160,7 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
         pipelined: Final = self._pipeline_scripts(
             CHECK_AND_INCREMENT_BY_N_SCRIPT,
             self.check_and_increment_by_n_script,  # pyright: ignore[reportArgumentType]  # sole caller guards it is not None
-            [(keys, args) for keys, args, _meta in descriptor_groups],
+            tuple((keys, args) for keys, args, _meta in descriptor_groups),
         )
         batched: Final = tuple(result for result in pipelined if result is not None)
         if len(batched) == len(descriptor_groups):
@@ -2222,12 +2222,12 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
         A Redis denial stands even when another group failed: the in-memory fallback only replaces a verdict
         Redis never gave."""
         replies: Final = await asyncio.gather(*results, return_exceptions=True)
-        responses: Final = [
+        responses: Final = tuple(
             self._pipelined_group_response(reply, meta)
             for reply, (_keys, _args, meta) in zip(replies, descriptor_groups)
-        ]
-        applied: Final[list[tuple[CounterRefund, ...]]] = []
-        statuses: Final[list[RateLimitStatus]] = []
+        )
+        applied: Final[list[tuple[CounterRefund, ...]]] = []  # mutable-ok: filled by the group loop
+        statuses: Final[list[RateLimitStatus]] = []  # mutable-ok: filled by the group loop
         reservation_windows: Final[set[ReservationWindowIdentity]] = set()  # mutable-ok: filled by the group loop
         for reply, response, (_keys, _args, meta) in zip(replies, responses, descriptor_groups):
             if isinstance(response, BaseException) or response["overall_code"] != "OK":
@@ -2253,9 +2253,9 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
                 failure,
             )
             await self._refund_applied_descriptor_groups(applied)
-            flat_meta: Final[list[AtomicCounterMeta]] = [
-                m for _k, _a, group_meta in descriptor_groups for m in group_meta
-            ]
+            flat_meta: Final = tuple(
+                itertools.chain.from_iterable(group_meta for _k, _a, group_meta in descriptor_groups)
+            )
             async with self._check_and_increment_lock:
                 return await self._atomic_check_and_increment_in_memory(
                     per_counter_meta=flat_meta,
@@ -2407,7 +2407,7 @@ class _PROXY_MaxParallelRequestsHandler_v3(CustomLogger):
 
     async def _atomic_check_and_increment_in_memory(
         self,
-        per_counter_meta: list[AtomicCounterMeta],
+        per_counter_meta: Sequence[AtomicCounterMeta],
         parent_otel_span: Span | None = None,
     ) -> RateLimitResponse:
         """In-memory all-or-nothing check-and-increment. Caller holds lock.
