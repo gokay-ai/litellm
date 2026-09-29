@@ -43,6 +43,7 @@ def _limiter(redis_cache: FakeRedisCache) -> _PROXY_MaxParallelRequestsHandler_v
     limiter.check_and_increment_by_n_script = AsyncMock(
         side_effect=AssertionError("descriptor groups must ride the request pipeline")
     )
+    limiter.window_guarded_token_increment_script = AsyncMock(return_value=[1, 0])
     return limiter
 
 
@@ -50,8 +51,10 @@ def _descriptor(key: str, value: str, rpm: int) -> RateLimitDescriptor:
     return {"key": key, "value": value, "rate_limit": {"requests_per_unit": rpm}}
 
 
-def _refunds(redis_cache: FakeRedisCache) -> list[tuple[str, float]]:
-    return [(op[1], op[2]) for op in redis_cache.alone if op[0] == "INCRBYFLOAT"]
+def _refunds(limiter: _PROXY_MaxParallelRequestsHandler_v3) -> list[tuple[str, float]]:
+    refund_script = limiter.window_guarded_token_increment_script
+    assert isinstance(refund_script, AsyncMock)
+    return [(call.kwargs["keys"][1], call.kwargs["args"][1]) for call in refund_script.await_args_list]
 
 
 def _lua_ok_replies(command: tuple[Any, ...]) -> Any:
@@ -108,7 +111,7 @@ async def test_an_over_limit_descriptor_in_the_pipeline_refunds_the_groups_that_
 
     assert response["overall_code"] == "OVER_LIMIT"
     assert response["statuses"][0]["descriptor_key"] == "team"
-    assert _refunds(redis_cache) == [("{api_key:k1}:requests", -1.0)]
+    assert _refunds(limiter) == [("{api_key:k1}:requests", -1.0)]
     assert len(client.pipelines) == 1
 
 
@@ -135,7 +138,7 @@ async def test_an_over_limit_descriptor_also_refunds_the_groups_the_pipeline_inc
 
     assert response["overall_code"] == "OVER_LIMIT"
     assert response["statuses"][0]["descriptor_key"] == "api_key"
-    assert _refunds(redis_cache) == [("{team:t1}:requests", -1.0), ("{model_per_key:k1:gpt}:requests", -1.0)]
+    assert _refunds(limiter) == [("{team:t1}:requests", -1.0), ("{model_per_key:k1:gpt}:requests", -1.0)]
     assert len(client.pipelines) == 1
 
 
@@ -164,7 +167,7 @@ async def test_a_redis_denial_stands_when_another_pipelined_group_fails():
 
     assert response["overall_code"] == "OVER_LIMIT"  # not the in-memory fallback's verdict
     assert response["statuses"][0]["descriptor_key"] == "api_key"
-    assert _refunds(redis_cache) == [("{model_per_key:k1:gpt}:requests", -1.0)]
+    assert _refunds(limiter) == [("{model_per_key:k1:gpt}:requests", -1.0)]
     assert len(client.pipelines) == 1
 
 
@@ -187,7 +190,7 @@ async def test_one_failed_lua_group_refunds_the_other_pipelined_groups_and_falls
 
     assert response["overall_code"] == "OK"
     assert len(response["statuses"]) == 2  # in-memory enforcement covered both descriptors
-    assert _refunds(redis_cache) == [("{team:t1}:requests", -1.0)]
+    assert _refunds(limiter) == [("{team:t1}:requests", -1.0)]
     assert len(client.pipelines) == 1
 
 
