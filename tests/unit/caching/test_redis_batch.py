@@ -26,7 +26,7 @@ SHA = hashlib.sha1(SCRIPT.encode()).hexdigest()  # noqa: S324
 
 
 class FakePipeline:
-    def __init__(self, reply_for: Callable[[tuple[Any, ...]], Any], fail: Exception | None) -> None:
+    def __init__(self, reply_for: Callable[[tuple[object, ...]], object], fail: Exception | None) -> None:
         self.commands: list[tuple[Any, ...]] = []
         self.reply_for = reply_for
         self.fail = fail
@@ -67,7 +67,7 @@ class FakePipeline:
 
 
 class FakeClient:
-    def __init__(self, reply_for: Callable[[tuple[Any, ...]], Any], fail: Exception | None = None) -> None:
+    def __init__(self, reply_for: Callable[[tuple[object, ...]], object], fail: Exception | None = None) -> None:
         self.pipelines: list[FakePipeline] = []
         self.reply_for = reply_for
         self.fail = fail
@@ -89,14 +89,14 @@ class FakeRedisCache(RedisCache):
         self.alone: list[tuple[str, Any]] = []
         self.store: dict[str, Any] = {}
 
-    def init_async_client(self) -> FakeClient:  # type: ignore[override]
+    def init_async_client(self) -> FakeClient:  # pyright: ignore[reportIncompatibleMethodOverride]  # fake client, no server
         return self.client
 
-    async def async_batch_get_cache(self, key_list: Sequence[str], **kwargs: object) -> dict[str, Any]:  # type: ignore[override]
+    async def async_batch_get_cache(self, key_list: Sequence[str], **kwargs: object) -> dict[str, Any]:  # pyright: ignore[reportIncompatibleMethodOverride]  # records the direct read
         self.alone.append(("MGET", tuple(key_list)))
         return {key: self.store.get(key) for key in key_list}
 
-    async def async_increment(self, key: str, value: float, ttl: int | None = None, **kwargs: object) -> float:  # type: ignore[override]
+    async def async_increment(self, key: str, value: float, ttl: int | None = None, **kwargs: object) -> float:  # pyright: ignore[reportIncompatibleMethodOverride]  # records the direct write
         self.alone.append(("INCRBYFLOAT", key, value))
         self.store[key] = float(self.store.get(key, 0.0)) + value
         return self.store[key]
