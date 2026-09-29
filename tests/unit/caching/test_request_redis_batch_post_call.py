@@ -478,6 +478,26 @@ async def test_a_spend_counter_whose_increment_failed_is_invalidated_not_trusted
 
 
 @pytest.mark.asyncio
+async def test_a_cancelled_post_call_flush_keeps_the_spend_counters_it_could_not_settle(monkeypatch):
+    from litellm.proxy import proxy_server
+
+    redis_cache = PostCallFakeRedisCache(
+        FakeClient(_ok_replies, fail=asyncio.CancelledError())  # pyright: ignore[reportArgumentType]  # a cancel raised mid-pipeline
+    )
+    spend_cache = DualCache()
+    spend_cache.attach_redis_cache(redis_cache)
+    spend_cache.in_memory_cache.set_cache("spend:key:k1", 3.0)
+    monkeypatch.setattr(proxy_server, "spend_counter_cache", spend_cache)
+
+    with request_redis_batch_scope(), pytest.raises(asyncio.CancelledError):
+        await proxy_server._apply_spend_counter_increments([PendingSpendIncrement("spend:key:k1", 0.5)])
+        await flush_post_call_redis_batches()
+
+    assert redis_cache.alone == [], "a cancel says nothing about the counter, so it must not be deleted"
+    assert spend_cache.in_memory_cache.get_cache("spend:key:k1") == 3.0
+
+
+@pytest.mark.asyncio
 async def test_the_update_cache_read_armed_before_accounting_rides_the_pipeline_of_the_reconcile_read():
     from litellm.proxy.proxy_server import _read_update_cache_values, arm_update_cache_read
 
