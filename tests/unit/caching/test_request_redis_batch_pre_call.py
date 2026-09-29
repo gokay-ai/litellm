@@ -6,7 +6,6 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
-import time
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -31,6 +30,7 @@ from litellm.router_utils.routing_read_batch import RoutingPrefetch
 from .test_redis_batch import FakeClient, FakeRedisCache
 
 _MODEL_GROUP = "claude"
+_FAR_FUTURE = 4_102_444_800.0  # 2100-01-01, a cooldown stamped then is still active
 
 
 def sha_of(script: str) -> str:
@@ -307,7 +307,7 @@ async def test_armed_routing_read_rides_the_admission_pipeline_and_routing_issue
 
 @pytest.mark.asyncio
 async def test_a_cooldown_recorded_locally_after_the_prefetch_left_still_excludes_its_deployment():
-    expired = {"exception_received": "429", "status_code": "429", "timestamp": time.time() - 3600, "cooldown_time": 60}
+    expired = {"exception_received": "429", "status_code": "429", "timestamp": 0.0, "cooldown_time": 60}
 
     def replies(command: tuple[Any, ...]) -> Any:
         if command[0] == "MGET":  # Redis holds a stale cooldown for dep-b and nothing for dep-a
@@ -327,7 +327,7 @@ async def test_a_cooldown_recorded_locally_after_the_prefetch_left_still_exclude
         router.arm_routing_read_prefetch(_MODEL_GROUP, {})
         cooldown_store.in_memory_cache.set_cache(
             CooldownCache.get_cooldown_cache_key("dep-a"),
-            {"exception_received": "429", "status_code": "429", "timestamp": time.time(), "cooldown_time": 60},
+            {"exception_received": "429", "status_code": "429", "timestamp": _FAR_FUTURE, "cooldown_time": 60},
         )
         picks = {
             (
