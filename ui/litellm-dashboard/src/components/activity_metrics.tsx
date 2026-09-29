@@ -17,12 +17,15 @@ import React, { useState } from "react";
 import { Team } from "./key_team_helpers/key_list";
 import KeyModelUsageView from "./UsagePage/components/KeyModelUsageView";
 import { keyActivityLabel } from "./UsagePage/keyActivityLabel";
-import { DailyData, KeyMetricWithMetadata, ModelActivityData, TopApiKeyData, TopModelData } from "./UsagePage/types";
+import type { ModelTopKeysResponse } from "./UsagePage/dailyActivityApi";
+import { DailyData, KeyMetricWithMetadata, ModelActivityData, TopModelData } from "./UsagePage/types";
 import { averageResponseTimeMs, formatResponseTime, valueFormatter } from "./UsagePage/utils/value_formatters";
 
 interface ActivityMetricsProps {
   modelMetrics: Record<string, ModelActivityData>;
+  summaryTitle?: string;
   hidePromptCachingMetrics?: boolean;
+  fetchTopApiKeys?: (model: string) => Promise<ModelTopKeysResponse>;
 }
 
 const modelAverageResponseTimeMs = (metrics: ModelActivityData): number | null =>
@@ -37,14 +40,107 @@ export const ResponseTimeTooltip = ({ active, payload, label }: ChartTooltipProp
   />
 );
 
+const ModelTopKeys = ({
+  modelName,
+  fetchTopApiKeys,
+}: {
+  modelName: string;
+  fetchTopApiKeys: (model: string) => Promise<ModelTopKeysResponse>;
+}) => {
+  interface ModelTopKeyRow {
+    api_key: string;
+    key_alias: string | null;
+    team_id: string | null;
+    spend: number;
+    requests: number;
+    tokens: number;
+  }
+  const [settled, setSettled] = useState<{
+    modelName: string;
+    fetchTopApiKeys: (model: string) => Promise<ModelTopKeysResponse>;
+    rows: ModelTopKeyRow[];
+  } | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    fetchTopApiKeys(modelName)
+      .then((response) => {
+        if (cancelled) return;
+        setSettled({
+          modelName,
+          fetchTopApiKeys,
+          rows: response.api_keys.map((row) => ({
+            api_key: row.api_key,
+            key_alias: row.metadata.key_alias ?? null,
+            team_id: row.metadata.team_id ?? null,
+            spend: row.metrics.spend,
+            requests: row.metrics.api_requests,
+            tokens: row.metrics.total_tokens,
+          })),
+        });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error(`Failed to fetch top keys for ${modelName}:`, error);
+        setSettled({ modelName, fetchTopApiKeys, rows: [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [modelName, fetchTopApiKeys]);
+
+  const rows = settled?.modelName === modelName && settled.fetchTopApiKeys === fetchTopApiKeys ? settled.rows : null;
+
+  if (rows === null) {
+    return (
+      <Card className="mt-4">
+        <CardContent>
+          <h3 className="text-lg font-medium text-foreground">Top Virtual Keys by Spend</h3>
+          <p className="mt-3 text-sm text-muted-foreground">Loading top keys...</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (rows.length === 0) return null;
+
+  return (
+    <Card className="mt-4">
+      <CardContent>
+        <h3 className="text-lg font-medium text-foreground">Top Virtual Keys by Spend</h3>
+        <div className="mt-3">
+          <div className="grid grid-cols-1 gap-2">
+            {rows.map((keyData) => (
+              <div key={keyData.api_key} className="flex justify-between items-center p-3 bg-muted rounded-lg">
+                <div>
+                  <p className="font-medium">{keyData.key_alias || `${keyData.api_key.substring(0, 10)}...`}</p>
+                  {keyData.team_id && <p className="text-xs text-muted-foreground">Team: {keyData.team_id}</p>}
+                </div>
+                <div className="text-right">
+                  <p className="font-medium">${formatNumberWithCommas(keyData.spend, 2)}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {keyData.requests.toLocaleString()} requests | {keyData.tokens.toLocaleString()} tokens
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+};
+
 const ModelSection = ({
   modelName,
   metrics,
   hidePromptCachingMetrics = false,
+  fetchTopApiKeys,
 }: {
   modelName: string;
   metrics: ModelActivityData;
   hidePromptCachingMetrics?: boolean;
+  fetchTopApiKeys?: (model: string) => Promise<ModelTopKeysResponse>;
 }) => {
   return (
     <div className="space-y-2">
@@ -96,31 +192,7 @@ const ModelSection = ({
         </Card>
       </div>
 
-      {metrics.top_api_keys && metrics.top_api_keys.length > 0 && (
-        <Card className="mt-4">
-          <CardContent>
-            <h3 className="text-lg font-medium text-foreground">Top Virtual Keys by Spend</h3>
-            <div className="mt-3">
-              <div className="grid grid-cols-1 gap-2">
-                {metrics.top_api_keys.map((keyData) => (
-                  <div key={keyData.api_key} className="flex justify-between items-center p-3 bg-muted rounded-lg">
-                    <div>
-                      <p className="font-medium">{keyData.key_alias || `${keyData.api_key.substring(0, 10)}...`}</p>
-                      {keyData.team_id && <p className="text-xs text-muted-foreground">Team: {keyData.team_id}</p>}
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">${formatNumberWithCommas(keyData.spend, 2)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {keyData.requests.toLocaleString()} requests | {keyData.tokens.toLocaleString()} tokens
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {fetchTopApiKeys && <ModelTopKeys modelName={modelName} fetchTopApiKeys={fetchTopApiKeys} />}
 
       {metrics.top_models && metrics.top_models.length > 0 && <KeyModelUsageView topModels={metrics.top_models} />}
 
@@ -300,7 +372,12 @@ const ModelCollapsible = ({
   );
 };
 
-export const ActivityMetrics: React.FC<ActivityMetricsProps> = ({ modelMetrics, hidePromptCachingMetrics = false }) => {
+export const ActivityMetrics: React.FC<ActivityMetricsProps> = ({
+  modelMetrics,
+  summaryTitle = "Overall Usage",
+  hidePromptCachingMetrics = false,
+  fetchTopApiKeys,
+}) => {
   const modelNames = Object.keys(modelMetrics).sort((a, b) => {
     if (a === "") return 1;
     if (b === "") return -1;
@@ -376,7 +453,7 @@ export const ActivityMetrics: React.FC<ActivityMetricsProps> = ({ modelMetrics, 
     <div className="space-y-8">
       {/* Global Summary */}
       <div className="border rounded-lg p-4">
-        <h3 className="text-lg font-medium text-foreground">Overall Usage</h3>
+        <h3 className="text-lg font-medium text-foreground">{summaryTitle}</h3>
         <div className="grid grid-cols-4 gap-4 mb-4">
           <Card>
             <CardContent>
@@ -481,6 +558,7 @@ export const ActivityMetrics: React.FC<ActivityMetricsProps> = ({ modelMetrics, 
               modelName={modelName || "Unknown Model"}
               metrics={modelMetrics[modelName]}
               hidePromptCachingMetrics={hidePromptCachingMetrics}
+              fetchTopApiKeys={fetchTopApiKeys}
             />
           </ModelCollapsible>
         ))}
@@ -530,7 +608,6 @@ export const processActivityData = (
           total_cache_creation_input_tokens: 0,
           total_response_time_ms: 0,
           total_timed_requests: 0,
-          top_api_keys: [],
           top_models: [],
           daily_data: [],
         };
@@ -569,41 +646,6 @@ export const processActivityData = (
       });
     });
   });
-
-  // Process Virtual Key breakdowns for each metric (skip if key is 'api_keys' to avoid duplication)
-  if (key !== "api_keys") {
-    Object.entries(modelMetrics).forEach(([model, _]) => {
-      const apiKeyBreakdown: Record<string, TopApiKeyData> = {};
-
-      // Aggregate Virtual Key data across all days
-      dailyActivity.results.forEach((day) => {
-        const modelData = day.breakdown[key]?.[model];
-        if (modelData && "api_key_breakdown" in modelData) {
-          Object.entries(modelData.api_key_breakdown || {}).forEach(([apiKey, keyData]) => {
-            if (!apiKeyBreakdown[apiKey]) {
-              apiKeyBreakdown[apiKey] = {
-                api_key: apiKey,
-                key_alias: keyActivityLabel(keyData.metadata, "") || null,
-                team_id: keyData.metadata.team_id,
-                spend: 0,
-                requests: 0,
-                tokens: 0,
-              };
-            }
-
-            apiKeyBreakdown[apiKey].spend += keyData.metrics.spend;
-            apiKeyBreakdown[apiKey].requests += keyData.metrics.api_requests;
-            apiKeyBreakdown[apiKey].tokens += keyData.metrics.total_tokens;
-          });
-        }
-      });
-
-      // Sort by spend and take top 5
-      modelMetrics[model].top_api_keys = Object.values(apiKeyBreakdown)
-        .sort((a, b) => b.spend - a.spend)
-        .slice(0, 5);
-    });
-  }
 
   // Process Model breakdowns for each API key (only when key is 'api_keys')
   if (key === "api_keys") {
