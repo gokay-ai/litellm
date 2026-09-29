@@ -8,6 +8,7 @@ import asyncio
 import datetime
 import hashlib
 import json
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
@@ -41,8 +42,15 @@ from litellm.types.utils import ModelResponse
 from .test_redis_batch import FakeClient, FakeRedisCache
 
 
+async def _script_outside_the_pipeline(keys: Sequence[str], args: Sequence[object]) -> object:
+    raise AssertionError("post-call scripts must ride the post-call pipeline")
+
+
 class PostCallFakeRedisCache(FakeRedisCache):
     """Records the direct (non-pipelined) writes an owner falls back to."""
+
+    def async_register_script(self, script: str) -> Callable[..., Awaitable[object]]:
+        return _script_outside_the_pipeline
 
     async def async_increment_pipeline(
         self, increment_list: list[RedisPipelineIncrementOperation], **kwargs: object
@@ -77,21 +85,21 @@ def _ok_replies(command: tuple[Any, ...]) -> Any:
     raise AssertionError(command)
 
 
+async def _run_ready_callbacks(client: FakeClient) -> None:
+    for _ in range(20):
+        if client.pipelines:
+            return
+        await asyncio.sleep(0)
+
+
 def _names(client: FakeClient, index: int = 0) -> list[str]:
     return [command[0] for command in client.pipelines[index].commands]
 
 
 def _limiter(redis_cache: FakeRedisCache) -> _PROXY_MaxParallelRequestsHandler_v3:
     dual_cache = DualCache()
-    limiter = _PROXY_MaxParallelRequestsHandler_v3(internal_usage_cache=InternalUsageCache(dual_cache=dual_cache))
     dual_cache.attach_redis_cache(redis_cache)
-
-    async def direct_script(keys: list[str], args: list[Any]) -> object:
-        raise AssertionError("post-call scripts must ride the post-call pipeline")
-
-    limiter.token_increment_script = direct_script  # pyright: ignore[reportAttributeAccessIssue]  # a script that fails if called outside the pipeline
-    limiter.parallel_release_script = direct_script  # pyright: ignore[reportAttributeAccessIssue]  # a script that fails if called outside the pipeline
-    return limiter
+    return _PROXY_MaxParallelRequestsHandler_v3(internal_usage_cache=InternalUsageCache(dual_cache=dual_cache))
 
 
 def _token_ops(*keys: str) -> list[RedisPipelineIncrementOperation]:
@@ -361,16 +369,22 @@ async def test_post_call_writes_still_waiting_on_their_callbacks_are_drained_at_
 
 
 @pytest.mark.asyncio
-async def test_a_post_call_batch_nobody_closes_goes_out_at_the_deadline():
+async def test_a_post_call_batch_nobody_closes_goes_out_at_the_deadline(monkeypatch: pytest.MonkeyPatch):
     client = FakeClient(_ok_replies)
     dual_cache = DualCache()
     dual_cache.attach_redis_cache(PostCallFakeRedisCache(client))
 
-    with request_redis_batch_scope(post_call_deadline=0.05) as request:
+    loop = asyncio.get_running_loop()
+    armed_at = loop.time()
+
+    with request_redis_batch_scope(post_call_deadline=60) as request:
         await dual_cache.async_increment_cache_post_call("x", 1, ttl=None)
-        await request.flush_all()  # the request boundary drains the immediate batch, not the post-call one
-        assert client.pipelines == []
-        await asyncio.sleep(0.2)
+        await request.flush_all()
+        await _run_ready_callbacks(client)
+        assert client.pipelines == [], "the request boundary drains the immediate batch, not the post-call one"
+
+        monkeypatch.setattr(loop, "time", lambda: armed_at + 61)
+        await _run_ready_callbacks(client)
 
     assert len(client.pipelines) == 1 and _names(client) == ["INCRBYFLOAT"]
 
