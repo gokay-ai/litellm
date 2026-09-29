@@ -3756,7 +3756,8 @@ def _settle_spend_counter_increment(item: PendingSpendIncrement) -> Callable[[as
             record_spend_counter_value(item.counter_key, current_value)
             return
         if future.cancelled():
-            spend_counter_cache.in_memory_cache.delete_cache(key=item.counter_key)
+            if spend_counter_cache.in_memory_cache.get_cache(key=item.counter_key) is not None:
+                spend_counter_cache.in_memory_cache.increment_cache(key=item.counter_key, value=item.increment)
             return
         verbose_proxy_logger.warning(
             "Spend counter %s increment did not land in the post-call pipeline; invalidating it", item.counter_key
