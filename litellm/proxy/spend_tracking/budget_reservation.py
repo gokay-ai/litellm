@@ -913,16 +913,21 @@ async def _initialize_reservation_counters(
 ) -> tuple[_BudgetCounter, ...]:
     """The counters whose current value is loaded, in order; one that cannot be loaded is skipped (or rejects the
     request under fail-closed enforcement) exactly as it was when each counter was reserved on its own."""
-    reservable: Final[list[_BudgetCounter]] = []
-    for counter in counters:
-        try:
-            await _initialize_reservation_counter(counter=counter)
-        except _CounterReservationUnavailable:
-            if fail_closed_budget_enforcement:
-                _raise_reservation_unavailable(counter_key=counter.counter_key)
-            continue
-        reservable.append(counter)
-    return tuple(reservable)
+    if not counters:
+        return ()
+    counter: Final = counters[0]
+    head: Final = (counter,) if await _reservation_counter_loaded(counter, fail_closed_budget_enforcement) else ()
+    return head + await _initialize_reservation_counters(counters[1:], fail_closed_budget_enforcement)
+
+
+async def _reservation_counter_loaded(counter: _BudgetCounter, fail_closed_budget_enforcement: bool) -> bool:
+    try:
+        await _initialize_reservation_counter(counter=counter)
+    except _CounterReservationUnavailable:
+        if fail_closed_budget_enforcement:
+            _raise_reservation_unavailable(counter_key=counter.counter_key)
+        return False
+    return True
 
 
 async def _initialize_reservation_counter(counter: _BudgetCounter) -> None:
