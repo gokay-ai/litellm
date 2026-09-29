@@ -70,7 +70,7 @@ def sha_of(script: str) -> str:
     return hashlib.sha1(script.encode()).hexdigest()  # noqa: S324
 
 
-def _ok_replies(command: tuple[Any, ...]) -> Any:
+def _ok_replies(command: tuple[object, ...]) -> object:
     match command[0]:
         case "INCRBYFLOAT":
             return b"7.5"
@@ -203,7 +203,7 @@ async def test_a_chat_response_written_through_the_handler_dual_cache_lands_in_m
 
 @pytest.mark.asyncio
 async def test_a_failed_operation_fails_only_its_owner_and_the_owner_applies_its_own_fallback():
-    def replies(command: tuple[Any, ...]) -> Any:
+    def replies(command: tuple[object, ...]) -> object:
         if command[0] == "EVALSHA" and command[3] == "{api_key:k1}:tokens":
             return Exception("ERR Lua")
         return _ok_replies(command)
@@ -228,7 +228,7 @@ async def test_a_failed_operation_fails_only_its_owner_and_the_owner_applies_its
 
 @pytest.mark.asyncio
 async def test_a_failed_slot_release_script_releases_the_slot_in_memory():
-    def replies(command: tuple[Any, ...]) -> Any:
+    def replies(command: tuple[object, ...]) -> object:
         if command[0] == "EVALSHA":
             return Exception("ERR Lua")
         return _ok_replies(command)
@@ -249,7 +249,7 @@ async def test_a_failed_slot_release_script_releases_the_slot_in_memory():
 
 @pytest.mark.asyncio
 async def test_a_released_slot_is_free_locally_at_once_and_the_older_redis_count_does_not_overwrite_the_gauge():
-    def replies(command: tuple[Any, ...]) -> Any:
+    def replies(command: tuple[object, ...]) -> object:
         if command[0] == "EVALSHA":
             return [2]
         return _ok_replies(command)
@@ -454,7 +454,7 @@ async def test_spend_counter_increments_ride_the_pipeline_and_settle_into_memory
 async def test_a_spend_counter_whose_increment_failed_is_invalidated_not_trusted(monkeypatch):
     from litellm.proxy import proxy_server
 
-    def replies(command: tuple[Any, ...]) -> Any:
+    def replies(command: tuple[object, ...]) -> object:
         if command[0] == "INCRBYFLOAT" and command[1] == "spend:key:k1":
             return Exception("OOM")
         return _ok_replies(command)
@@ -548,7 +548,7 @@ async def test_the_update_cache_read_sees_a_cached_spend_written_while_the_spend
 
     cached_user_spend = {"user-1": 1.0}
 
-    def replies(command: tuple[Any, ...]) -> Any:
+    def replies(command: tuple[object, ...]) -> object:
         if command[0] == "MGET":
             return [
                 json.dumps({"spend": cached_user_spend[key]}) if key in cached_user_spend else b"0.5"
