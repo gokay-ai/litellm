@@ -365,14 +365,15 @@ class RedisBatch:
 
 
 def _backend_key(redis_cache: RedisCache) -> object:
-    """Two ``RedisCache`` instances built from the same connection settings talk to the same server, so the
-    proxy's cache and the router's cache share one pipeline (the router gets its port as a string, hence the
-    ``str`` comparison); a cache whose settings cannot be compared (a test double) gets its own."""
+    """Two ``RedisCache`` instances built from the same connection settings and namespace talk to the same server
+    under the same key prefix, so the proxy's cache and the router's cache share one pipeline (the router gets its
+    port as a string, hence the ``str`` comparison); a cache whose settings cannot be compared (a test double) gets
+    its own."""
     try:
         settings: Final = tuple(sorted((str(k), str(v)) for k, v in redis_cache.redis_kwargs.items() if v is not None))  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType, reportUnknownArgumentType]  # untyped cache API
     except AttributeError:
         return ("instance", id(redis_cache))
-    return (type(redis_cache), settings)
+    return (type(redis_cache), redis_cache.namespace, settings)
 
 
 _open_post_call: Final[weakref.WeakSet[RequestRedisBatches]] = weakref.WeakSet()
