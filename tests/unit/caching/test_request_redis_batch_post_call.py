@@ -46,14 +46,14 @@ class PostCallFakeRedisCache(FakeRedisCache):
 
     async def async_increment_pipeline(
         self, increment_list: list[RedisPipelineIncrementOperation], **kwargs: object
-    ) -> list[float]:  # type: ignore[override]
+    ) -> list[float]:
         return [await self.async_increment(op["key"], op["increment_value"]) for op in increment_list]
 
-    async def async_delete_cache(self, key: str, **kwargs: object) -> None:  # type: ignore[override]
+    async def async_delete_cache(self, key: str, **kwargs: object) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]  # the fake drops RedisCache's unused kwargs
         self.alone.append(("DEL", key))
         self.store.pop(key, None)
 
-    async def async_set_cache(self, key: str, value: object, **kwargs: object) -> None:  # type: ignore[override]
+    async def async_set_cache(self, key: str, value: object, **kwargs: object) -> None:
         self.alone.append(("SET", key, dict(kwargs)))
         self.store[key] = value
 
@@ -89,8 +89,8 @@ def _limiter(redis_cache: FakeRedisCache) -> _PROXY_MaxParallelRequestsHandler_v
     async def direct_script(keys: list[str], args: list[Any]) -> object:
         raise AssertionError("post-call scripts must ride the post-call pipeline")
 
-    limiter.token_increment_script = direct_script  # type: ignore[assignment]
-    limiter.parallel_release_script = direct_script  # type: ignore[assignment]
+    limiter.token_increment_script = direct_script  # pyright: ignore[reportAttributeAccessIssue]  # a script that fails if called outside the pipeline
+    limiter.parallel_release_script = direct_script  # pyright: ignore[reportAttributeAccessIssue]  # a script that fails if called outside the pipeline
     return limiter
 
 
@@ -100,7 +100,7 @@ def _token_ops(*keys: str) -> list[RedisPipelineIncrementOperation]:
 
 def _response_cache(redis_cache: FakeRedisCache) -> Cache:
     cache = Cache(type="local")
-    cache.type = "redis"  # type: ignore[assignment]  # the fake stands in for the Redis backend
+    cache.type = "redis"  # pyright: ignore[reportAttributeAccessIssue]  # the fake stands in for the Redis backend
     cache.cache = redis_cache
     return cache
 
