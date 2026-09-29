@@ -21,6 +21,7 @@ from litellm.proxy.common_utils.user_api_key_cache import UserApiKeyCache
 from litellm.proxy.hooks.parallel_request_limiter_v3 import (
     CHECK_AND_INCREMENT_BY_N_SCRIPT,
     RateLimitDescriptor,
+    RateLimitUnverifiableError,
     _PROXY_MaxParallelRequestsHandler_v3,
 )
 from litellm.proxy.utils import InternalUsageCache
@@ -36,9 +37,12 @@ def sha_of(script: str) -> str:
     return hashlib.sha1(script.encode()).hexdigest()  # noqa: S324
 
 
-def _limiter(redis_cache: FakeRedisCache) -> _PROXY_MaxParallelRequestsHandler_v3:
+def _limiter(redis_cache: FakeRedisCache, fail_closed: bool = False) -> _PROXY_MaxParallelRequestsHandler_v3:
     dual_cache = DualCache()
-    limiter = _PROXY_MaxParallelRequestsHandler_v3(internal_usage_cache=InternalUsageCache(dual_cache=dual_cache))
+    limiter = _PROXY_MaxParallelRequestsHandler_v3(
+        internal_usage_cache=InternalUsageCache(dual_cache=dual_cache),
+        fail_closed_resolver=lambda: fail_closed,
+    )
     dual_cache.attach_redis_cache(redis_cache)  # after init: the fake has no server to register scripts on
     limiter.check_and_increment_by_n_script = AsyncMock(
         side_effect=AssertionError("descriptor groups must ride the request pipeline")
@@ -191,6 +195,40 @@ async def test_one_failed_lua_group_refunds_the_other_pipelined_groups_and_falls
     assert response["overall_code"] == "OK"
     assert len(response["statuses"]) == 2  # in-memory enforcement covered both descriptors
     assert _refunds(limiter) == [("{team:t1}:requests", -1.0)]
+    assert len(client.pipelines) == 1
+
+
+@pytest.mark.parametrize(
+    "client, refunded",
+    [
+        (
+            FakeClient(
+                lambda command: (
+                    ValueError("script blew up")
+                    if command[0] == "EVALSHA" and command[3] == "{api_key:k1}:window"
+                    else _lua_ok_replies(command)
+                )
+            ),
+            [("{team:t1}:requests", -1.0)],
+        ),
+        (FakeClient(_lua_ok_replies, fail=ConnectionError("redis down")), []),
+    ],
+    ids=["one_group_failed", "pipeline_failed"],
+)
+@pytest.mark.asyncio
+async def test_fail_closed_rejects_when_a_pipelined_lua_group_cannot_be_verified(
+    client: FakeClient, refunded: list[tuple[str, float]]
+):
+    limiter = _limiter(FakeRedisCache(client), fail_closed=True)
+
+    with request_redis_batch_scope(), pytest.raises(RateLimitUnverifiableError) as exc:
+        await limiter.atomic_check_and_increment_by_n(
+            descriptors=[_descriptor("api_key", "k1", 10), _descriptor("team", "t1", 20)],
+            increments=[{"requests": 1}, {"requests": 1}],
+        )
+
+    assert exc.value.status_code == 503
+    assert _refunds(limiter) == refunded
     assert len(client.pipelines) == 1
 
 
