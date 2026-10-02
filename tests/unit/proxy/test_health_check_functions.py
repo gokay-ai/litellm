@@ -220,6 +220,60 @@ def test_aggregate_health_check_results_multiple_endpoints():
     assert result[key]["unhealthy_count"] == 0
 
 
+
+def test_results_are_attributed_to_their_own_deployment():
+    """Deployments sharing litellm_params.model get only their own endpoint counts."""
+    # Two deployments serving the same model on different hosts.
+    model_list = [
+        {
+            "model_name": "qwen",
+            "litellm_params": {"model": "openai/qwen", "api_base": "http://a:11434/v1"},
+            "model_info": {"id": "host-a"},
+        },
+        {
+            "model_name": "qwen",
+            "litellm_params": {"model": "openai/qwen", "api_base": "http://b:11434/v1"},
+            "model_info": {"id": "host-b"},
+        },
+    ]
+    healthy = [{"model": "openai/qwen", "api_base": "http://a:11434/v1", "model_id": "host-a"}]
+    unhealthy = [
+        {
+            "model": "openai/qwen",
+            "api_base": "http://b:11434/v1",
+            "model_id": "host-b",
+            "error": "Connection error.",
+        }
+    ]
+
+    results = _aggregate_health_check_results(
+        _build_model_param_to_info_mapping(model_list), healthy, unhealthy
+    )
+
+    a = results[("host-a", "qwen")]
+    b = results[("host-b", "qwen")]
+    assert (a["healthy_count"], a["unhealthy_count"], a["error_message"]) == (1, 0, None)
+    assert (b["healthy_count"], b["unhealthy_count"]) == (0, 1)
+    assert "Connection error" in b["error_message"]
+
+
+def test_aggregate_falls_back_to_model_param_when_endpoint_has_no_model_id():
+    """Without model_id on the endpoint, keep prior model-param list behaviour."""
+    model_param_to_info = {
+        "openai/qwen": [
+            {"model_name": "qwen", "model_id": "host-a"},
+            {"model_name": "qwen", "model_id": "host-b"},
+        ],
+    }
+    healthy = [{"model": "openai/qwen"}]  # no model_id
+    unhealthy = []
+
+    results = _aggregate_health_check_results(model_param_to_info, healthy, unhealthy)
+
+    assert results[("host-a", "qwen")]["healthy_count"] == 1
+    assert results[("host-b", "qwen")]["healthy_count"] == 1
+
+
 @pytest.mark.asyncio
 async def test_save_health_check_results_if_changed_status_changed():
     """Test saving when status changes"""
